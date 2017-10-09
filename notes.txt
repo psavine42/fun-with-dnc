@@ -11,5 +11,5 @@ c0 = Variable(torch.randn(q, z, y))
 utput, hn = rnn(input, (h0, c0))
 
 nn (x, y, q)
-in (5, z, x)
+in (a, z, x)
 hdn (q, z, y)
