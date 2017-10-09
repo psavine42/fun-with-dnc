@@ -15,7 +15,7 @@ class misc(unittest.TestCase):
 
         self.data = gen.RandomData(seq_width=sq_length,
                                    seq_len=sq_width)
-        self.Dnc = dnc.DNC(in_unit_size=sq_length,
+        self.Dnc = dnc.DNC(unit_size_W=sq_length,
                            batch_size=bt_size,
                            num_heads=n_heads)
         

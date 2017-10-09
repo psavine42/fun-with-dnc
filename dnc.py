@@ -59,6 +59,14 @@ class DNCMemory():
         self.W = W
         self.N = N
         self.memory = Variable(torch.zeros(N, W).float())
+    
+    def content_lookup(self, key, weights):
+        norm_mem = torch.norm(self.memory, p=2, dim=1).detach()
+        norm_key = torch.norm(key, 0)
+        sim = torch.dot(norm_mem, norm_key) 
+        #str is 1*1 or 1*R
+        #returns similarity measure
+        return F.softmax(sim * weights, 0)
 
     def Write(self, w_t_W, e_t, v_t):
         "Reading and writing to memory"
@@ -67,20 +75,23 @@ class DNCMemory():
         M = torch.mul(self.memory, erase) + torch.dot(w_t_W, v_t)
         return M
 
+
 class DNC(nn.Module):
-    def __init__(self, batch_size=32, 
+    def __init__(self, batch_size=32,
+                 N=32,
                  unit_size_W=6, 
                  num_heads=1):
         super(DNC, self).__init__()
         self.unit_size_W = unit_size_W
         self.num_read_heads = num_heads
+        self.dnc_rows_N = N
         #compute interface size
         self.interface_size = (self.num_read_heads * self.unit_size_W) + \
                               (3 * self.unit_size_W) + \
                               (5 * self.num_read_heads + 3)
-        self.Memory = DNCMemory()
+        self.Memory = DNCMemory(W=unit_size_W, N=N)
         self.nn_output_size = self.interface_size + unit_size_W
-        self.interface_weights = 
+        self.interface_weights = \
             Variable(torch.zeros(self.nn_output_size, self.interface_size))
         self.controller = Controller(in_unit_size=unit_size_W,
                                      batch_size=batch_size)
@@ -91,28 +102,29 @@ class DNC(nn.Module):
                      [2] * (self.unit_size_W), [3],
                      [4] * (self.unit_size_W),
                      [5] * (self.unit_size_W),
-                     [6] * (self.num_read_heads), [7], [8],
+                     [6] * (self.num_read_heads), 
+                     [7], 
+                     [8],
                      [9] * (self.num_read_heads * 3)]
         ds = []
-        cnt = 0
+        cntr = 0
         for idx in partition:
             if len(idx) == 1:
-                ds.append([cnt])
+                ds.append(torch.tensor([cntr]))
             else:
-                ds.append([cnt, cnt + len(idx) - 1])
-            cnt += len(idx)
-        print(ds)
+                ds.append(torch.tensor([cntr, cntr + len(idx) - 1]))
+            cntr += len(idx)
         return ds
     
-    def partition_components(self, x):
+    def partition_components(self, xs):
         sizes = self.interface_part()
-         
-
+        return (torch.index_select(xs, dim=0, i) for i in sizes)
 
     def forward(self, x, hidden):
         #convert interface vector into a set of read write vectors
         #run controller forward
         out_v_T, out_Eta = self.controller(x, hidden)
+        
         #torch.index_select(out_v_T, 1, [0, 2])
         #interface_vec_eta = tf.matmul(l2_act, self.interface_weights)
         y_T = out_v_T 
