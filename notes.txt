@@ -1,0 +1,15 @@
+>>> rnn = nn.LSTM(10, 20, 2)
+>>> input = Variable(torch.randn(5, 3, 10))
+>>> h0 = Variable(torch.randn(2, 3, 20))
+>>> c0 = Variable(torch.randn(2, 3, 20))
+>>> output, hn = rnn(input, (h0, c0))
+
+rnn = nn.LSTM(x, y, q)
+input = Variable(torch.randn(5, z, x))
+h0 = Variable(torch.randn(q, z, y))
+c0 = Variable(torch.randn(q, z, y))
+utput, hn = rnn(input, (h0, c0))
+
+nn (x, y, q)
+in (5, z, x)
+hdn (q, z, y)
