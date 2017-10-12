@@ -32,38 +32,73 @@ from torch.utils.data import DataLoader
     variant of the deep LSTM architecture
     """
 
+"""
+access_config = {
+      "memory_size": FLAGS.memory_size,
+      "word_size": FLAGS.word_size,
+      "num_reads": FLAGS.num_read_heads,
+      "num_writes": FLAGS.num_write_heads,
+  }
+  controller_config = {
+      "hidden_size": FLAGS.hidden_size,
+      [Variable(torch.zeros(num_layers, batch_size, hidden_size)),
+        Variable(torch.zeros(num_layers, batch_size, hidden_size))]
+  }
+"""
+eps = 10e-6
+
 class Controller(nn.Module):
-    def __init__(self, 
-                 in_unit_size=6, 
-                 batch_size=32, 
-                 layers=2, 
-                 size=250):
+    def __init__(self,
+                 batch_size=32,
+                 num_layers=2,
+                 word_size=4,
+                 output_size=24,
+                 hidden_size=250):
         super(Controller, self).__init__()
-        self.num_layers = layers
+        self.num_layers = num_layers
         self.batch_size = batch_size
-        self.num_hidden = size
-        print(in_unit_size, size, layers)
-        self.lst1 = nn.LSTM(input_size=in_unit_size, 
-                            hidden_size=size, 
-                            num_layers=layers,
+        self.num_hidden = hidden_size
+        #state
+        print("controller {}, {}, {} -> out:{}".format(
+            word_size, hidden_size, num_layers, output_size))
+        self.lst1 = nn.LSTM(input_size=word_size,
+                            hidden_size=hidden_size,
+                            num_layers=num_layers,
+                            batch_first=True,
                             bidirectional=False)
-    def init_hidden(self):
-        return Variable(weight.new(self.num_layers, self.batch_size, self.num_hidden).zero_())
+        self.map_to_output = nn.Linear(hidden_size, output_size)
 
-    def forward(self, x, hidden):
-        return self.lst1(x, hidden)
+
+    def forward(self, inputs, previous_controller_state):
+        print(inputs.size(), self.lst1)
+        lstm_inputs = inputs.permute(0, 2, 1)
+
+        print(lstm_inputs.size(), )
+        lstm_out, controller_state = self.lst1(lstm_inputs, previous_controller_state)
+        print(lstm_out.size(), )
         
+        outputs = self.map_to_output(lstm_out)
+        return outputs, controller_state
 
-class DNCMemory():
-    def __init__(self, W=100, N=32, R_h=1, W_h=1):
-        self.W = W
-        self.N = N
-        self.memory = Variable(torch.zeros(N, W).float())
-    
+
+class DNCMemory(nn.Module):
+    def __init__(self,
+                 word_size=32,
+                 memory_size=100,
+                 read_heads_h=1,
+                 write_heads=1):
+        self.W = word_size
+        self.N = memory_size
+        self.num_reads = read_heads_h
+        self.num_writes = write_heads
+        self._memory = Variable(torch.zeros(self.N , self.W).float())
+        self._linkage = [] #addressing.TemporalLinkage(memory_size, num_writes)
+        self._freeness = [] #addressing.Freeness(memory_size)
+
     def content_lookup(self, key, weights):
         norm_mem = torch.norm(self.memory, p=2, dim=1).detach()
         norm_key = torch.norm(key, 0)
-        sim = torch.dot(norm_mem, norm_key) 
+        sim = torch.dot(norm_mem, norm_key)
         #str is 1*1 or 1*R
         #returns similarity measure
         return F.softmax(sim * weights, 0)
@@ -75,27 +110,56 @@ class DNCMemory():
         M = torch.mul(self.memory, erase) + torch.dot(w_t_W, v_t)
         return M
 
+    def forward(self, inputs):
+        #create
+        inputs = self._read_inputs(inputs)
+
+        # Update usage using inputs['free_gate'] and previous read & write weights
+        # Write to memory
+        #linkage_state = self._linkage(write_weights, prev_state.linkage)
+        # Read from memory.
+        read_words = tf.matmul(read_weights, self._memory)
+        memory = []
+        read_weights = []
+        write_weights = []
+        linkage_state = []
+        usage = []
+        return (read_words,
+                (memory, read_weights, write_weights, linkage_state, usage))
+
 
 class DNC(nn.Module):
-    def __init__(self, batch_size=32,
-                 N=32,
-                 unit_size_W=6, 
-                 num_heads=1):
+    def __init__(self, 
+                 batch_size=32,
+                 #mem_rows__N=32,
+                 memory_size=100,
+                 word_len=6,
+                 num_layers=2,
+                 hidden_size=4,
+                 num_inputs=250,
+                 num_read_heads=1,
+                 **kwdargs):
         super(DNC, self).__init__()
-        self.unit_size_W = unit_size_W
-        self.num_read_heads = num_heads
-        self.dnc_rows_N = N
-        #compute interface size
-        self.interface_size = (self.num_read_heads * self.unit_size_W) + \
-                              (3 * self.unit_size_W) + \
+
+        self.word_len = word_len
+        self.num_read_heads = num_read_heads
+        self.interface_size = (self.num_read_heads * self.word_len) + \
+                              (3 * self.word_len) + \
                               (5 * self.num_read_heads + 3)
-        self.Memory = DNCMemory(W=unit_size_W, N=N)
-        self.nn_output_size = self.interface_size + unit_size_W
-        self.interface_weights = \
-            Variable(torch.zeros(self.nn_output_size, self.interface_size))
-        self.controller = Controller(in_unit_size=unit_size_W,
-                                     batch_size=batch_size)
-    
+
+        self._controller = Controller(word_size= word_len + num_read_heads,
+                                      hidden_size=hidden_size,
+                                      num_layers=num_layers,
+                                      output_size=self.interface_size,
+                                      batch_size=batch_size)
+
+       # print()
+        #print("DNC_memory w:{}, N:{}".format(self.Memory.W, self.Memory.N))
+        #print("interface size: ", self.interface_weights.size())
+        #print("unit_size", unit_size_W)
+        #print("read vec", self.read_vector__r.size())
+        #print()
+
     def interface_part(self):
         partition = [[0] * (self.num_read_heads * self.unit_size_W),
                      [1] * (self.num_read_heads),
@@ -118,33 +182,71 @@ class DNC(nn.Module):
     
     def partition_components(self, xs):
         sizes = self.interface_part()
-        return (torch.index_select(xs, dim=0, i) for i in sizes)
+        return (torch.index_select(xs, 0, i) for i in sizes)
 
-    def forward(self, x, hidden):
-        #convert interface vector into a set of read write vectors
-        #run controller forward
-        out_v_T, out_Eta = self.controller(x, hidden)
-        
-        #torch.index_select(out_v_T, 1, [0, 2])
-        #interface_vec_eta = tf.matmul(l2_act, self.interface_weights)
-        y_T = out_v_T 
+    def forward(self,
+                inputs,
+                prev_access_output,
+                prev_access_state,
+                prev_controller_state):
         """
-        read_keys_k_t = 
-        read_weights = 
-        write_keys_k_t =
-        write_str_B_t = 
-        erase_vec_e_t = 
-        write_vec_v_t = 
-        free_gates_f_t =
-        allocation_gate_g_t =
-        write_gate_g_t = 
-        read_modes_R = 
-        """
-        return out_v_T, out_Eta
+            `input`          [batch_size, seq_len, word_size]
+            `access_output`
+                `[batch_size, num_reads, word_size]` containing read words.
+                    access output_size =
+            `access_state` is a tuple of the access module's state
+                memory,       [memory_size, word_size]
+                read_weights,  W r [batch_size, num_reads, memory_size]
+                write_weights, W [batch_size, num_writes, memory_size]
+                linkage_state, L
+                    links             [batch_size, num_writes, memory_size, memory_size]
+                    precedence_wghts  [batch_size, num_writes, memory_size]
+                usage,  F
+            `controller_state` []
+                :tuple of controller module's state
 
-def content_addressed_lookup(k_, ):
-    F.cosine_similarity()
+        """
+        #prev_access_output, prev_access_state, prev_controller_state = previous_state
+        print(type(inputs), type(prev_access_output))
+        controller_input = torch.cat([inputs, prev_access_output], dim=1)
+
+        controller_output, controller_state = self._controller(controller_input, prev_controller_state)
+        print("controller out", controller_output.size())
+        #access_output, access_state = self._Memory(controller_output, prev_access_state)
+        access_output, access_state = [], []
+        output = []
+        #output = torch.cat((controller_output, access_output))
+        return [output, access_output, access_state, controller_state]
+
+def content_addressed_lookup(k):
+    #F.cosine_similarity()
     pass
+
+def start_state(num_layers=2,
+                word_len=4,
+                num_read_heads=1,
+                num_write_heads=1,
+                memory_size=100,
+                batch_size=8,
+                hidden_size=64):
+    """ prev_state: A `DNCState` tuple containing the fields
+        `access_output`,`access_state` and `controller_state`.
+        `access_output` `[batch_size, num_reads, word_size]` containing read words.
+        `access_state` is a tuple of the access module's state
+        `controller_state` is a tuple of controller module's state
+    """
+    interface_size = num_read_heads * word_len + 3 * word_len +  5 * num_read_heads + 3
+    #interface_size
+    #memory state
+    #controller state
+    access_output = Variable(torch.zeros(batch_size, num_read_heads, word_len))
+    memory = Variable(torch.zeros(word_len, memory_size))
+    hidden = [Variable(torch.zeros(num_layers, batch_size, hidden_size)),
+              Variable(torch.zeros(num_layers, batch_size, hidden_size))]
+    return [access_output, memory, hidden]
+
+
+
 
 def one_hot(x):
     pass
@@ -163,6 +265,20 @@ def run_dnc(batch_size=32):
     for i, (trgt, label) in enumerate(loader):
         #output = dnc(trgt)
         pass
+
+
+"""
+        read_keys_k_t = 
+        read_weights = 
+        write_keys_k_t =
+        write_str_B_t = 
+        erase_vec_e_t = 
+        write_vec_v_t = 
+        free_gates_f_t =
+        allocation_gate_g_t =
+        write_gate_g_t = 
+        read_modes_R = 
+        """
 
 if __name__ == "__main__":
     print("x")

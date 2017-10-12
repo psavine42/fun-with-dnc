@@ -1,6 +1,6 @@
 from torch.utils.data import Dataset
 import numpy as np
-
+import torch
 
 class RandomData(Dataset):   
     def __init__(self,
@@ -17,7 +17,7 @@ class RandomData(Dataset):
         con = np.random.randint(0, self.seq_width, size=self.seq_len)
         seq = np.zeros((self.seq_len, self.seq_width))
         seq[np.arange(self.seq_len), con] = 1
-        end = np.asarray([[-1] * self.seq_width])
+        end = torch.from_numpy(np.asarray([[-1] * self.seq_width])).float()
         zer = np.zeros((self.seq_len, self.seq_width))
         return seq, zer
 
