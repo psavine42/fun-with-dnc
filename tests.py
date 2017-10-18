@@ -5,6 +5,10 @@ import generators as gen
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
 import numpy as np
+import torchvision.utils as vutils
+import numpy as np
+from tensorboardX import SummaryWriter
+
 
 sq_width = 4
 sq_length = 6
@@ -13,60 +17,73 @@ n_heads = 1
 num_layers=2, 
 init_args= {'word_len':4,
             'num_layers':2,
-            'num_read_heads':1,
+            'num_read_heads':2,
             'num_write_heads':1,
             'memory_size':100,
-            'batch_size':8, 
+            'batch_size':5,
             'hidden_size':64}
 
 class misc(unittest.TestCase):
     def setUp(self):
-
+        self.writer = SummaryWriter()
         self.data = gen.RandomData(seq_width=init_args['word_len'],
-                                   seq_len=init_args['word_len'])
+                                   seq_len=init_args['num_read_heads'])
         self.loader = DataLoader(self.data, batch_size=init_args['batch_size'])
         self.Dnc = dnc.DNC(**init_args)
-        
+
     def partitions(self):
         #prt = self.Dnc.interface_part()
         #print(prt)
         flt = flat_list = [item for sublist in prt for item in sublist]
         print(flt, len(flt))
         assert len(flt) == self.Dnc.interface_size
-    
+
     def dims(self):
         print(self.Dnc.controller.lst1.state_dict())
 
     def run_(self):
-        itm, zer = self.data.__getitem__(0)
-        hidn = (Variable(torch.zeros(2, bt_size, 250)),
-                Variable(torch.zeros(2, bt_size, 250)))
-        inpt = Variable(torch.from_numpy(itm).unsqueeze(1).float())
-        print("input", inpt.size())
-        print("hiddn", hidn[0].size())
-
+        itm, zer = self.loader.__iter__().__next__()
+        inpt = Variable(itm.float())
+        
+        
+        wt = Variable(torch.FloatTensor(init_args['batch_size'],
+                                        1, init_args['word_len']).uniform_(0, 1))
+        print("input", wt.size())
         init_state = dnc.start_state(**init_args)
 
-        out1, (out2, out3) = self.Dnc(inpt, hidn)
-        print("outs", out1.size(), out2.size(), out3.size())
+        out1, out_state = self.Dnc(wt, init_state)
+        #print("outs", out1.size(), out2.size(), out3.size())
 
     def init_test(self):
         itm, zer = self.loader.__iter__().__next__()
         print("input", itm.size())
         initial_state = dnc.start_state(**init_args)
         access_output, access_state, hidden = initial_state
-        
+
         print("access_output", access_output.size())
-        print("access_state", access_state.size())
+        #print("access_state", access_state.size())
 
         print()
-        out1, _, _, _ = self.Dnc(Variable(itm.float()), access_output, access_state, hidden )
+        out1, _, _, _ = self.Dnc(Variable(itm.float()), initial_state )
         #print("hidden_out", h_o.size())
         #print("hidden_c", h_c.size())
-    
+
     def controller_(self):
         dnc.Controller()
-        
+
+    def freetest(self):
+        _, initial_state, _ = dnc.start_state(**init_args)
+        freenes = dnc.Usage(memory_size=100)
+        batch_size = 3
+        free_gate = Variable(torch.FloatTensor(batch_size, 1).uniform_(0, 1))
+        mem, read_wghts, wrt_wghts, linkage, usage = initial_state
+
+        wrt_wghts = torch.stack([wrt_wghts for i in range(batch_size)], 0)
+        read_wghts = torch.stack([read_wghts for i in range(batch_size)], 0)
+        usage = torch.stack([usage for i in range(batch_size)], 0)
+
+        result = freenes(wrt_wghts, free_gate, read_wghts, usage)
+        print(result.size())
 
 
 class Setup(unittest.TestCase):
