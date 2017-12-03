@@ -1,0 +1,28 @@
+
+>>> rnn = nn.LSTM(10, 20, 2)
+input_size – The number of expected features in the input x
+hidden_size – The number of features in the hidden state h
+num_layers – Number of recurrent layers.
+
+input (seq_len, batch, input_size): tensor containing the features of the input sequence. The input can also be a packed variable length sequence. See torch.nn.utils.rnn.pack_padded_sequence() for details.
+h_0 (num_layers * num_directions, batch, hidden_size): tensor containing the initial hidden state for each element in the batch.
+c_0 (num_layers * num_directions, batch, hidden_size): tensor containing the initial cell state for each element in the batch.
+
+
+>>> input = Variable(torch.randn(5, 3, 10))
+>>> h0 = Variable(torch.randn(2, 3, 20))
+>>> c0 = Variable(torch.randn(2, 3, 20))
+>>> output, hn = rnn(input, (h0, c0))
+
+rnn = nn.LSTM(word_size, hidden_size, num_layers)
+h0 = Variable(torch.randn(num_layers, z, hidden_size))
+c0 = Variable(torch.randn(q, z, y))
+
+input = Variable(torch.randn(5, z, x))
+
+output, hn = rnn(input, (h0, c0))
+
+nn (x, y, q)
+in (a, z, x)
+hdn (q, z, y)
+hdn (q, z, y)
