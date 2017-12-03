@@ -267,9 +267,15 @@ class Linkage(nn.Module):
             link and precedence weights.
             """
         prev_link, prev_precedence_weights = prev_state
+        assert list(write_weights.size()[1:]) == [1, self._memory_size]
+
         link = self._link(prev_link, prev_precedence_weights, write_weights)
         precedence_weights = self._precedence_weights(prev_precedence_weights, write_weights)
+
+        assert list(link.size()[1:]) == [1, self._memory_size, self._memory_size]
+        assert list(precedence_weights.size()[1:]) == [1, self._memory_size]
         return link, precedence_weights
+
 
 class BatchSoftmax(nn.Module):
     def forward(self, input_):
@@ -306,37 +312,47 @@ class WeightFn(nn.Module):
         print()
         # Calculates the inner product between the query vector and words in memory.
         print(memory.size(), keys.size(), strengths.size())
-        dot = keys.matmul(memory.transpose(1, 2))
+
+        assert list(memory.size())[2] == self._word_size
+        assert list(keys.size())[1:] == [self._num_heads, self._word_size]
+        assert list(strengths.size())[1:] == [self._num_heads]
+        
+        dot = keys.bmm(memory.transpose(1, 2))
 
         # Outer product to compute denominator (euclidean norm of query and memory).
         memory_norms = self._vector_norms(memory)
         key_norms = self._vector_norms(keys)
 
         print(key_norms.size(), memory_norms.size())
-        norm = key_norms.matmul(memory_norms.transpose(1, 2))
+        norm = key_norms.bmm(memory_norms.transpose(1, 2))
 
         # Calculates cosine similarity between the query vector and words in memory.
         print("dot", dot.size(), norm.size())
         activations = dot / (norm + eps)
 
         #Weighted softmax as in paper.
-        transformed_strengths = self._strength_op(strengths) #.unsqueeze(-1)
+        transformed_strengths = self._strength_op(strengths).unsqueeze(-1)
 
         sharp_activations = activations * transformed_strengths
         print("activations", transformed_strengths.size())
         print("transformed_strengths", transformed_strengths.size())
         print("sharp_activations", sharp_activations.size())
-        print()
-        return self.softmax(sharp_activations)
+        result = self.softmax(sharp_activations)
+        print(list(result.size())[1:])
+        assert list(result.size())[1] == self._num_heads
+        return result
 
 
 class DNCMemory(nn.Module):
-    def __init__(self, word_size=32, memory_size=100, num_reads=1, write_heads=1):
+    def __init__(self, word_size=32, memory_size=100, num_reads=1, write_heads=1, batch_size=32):
         super(DNCMemory, self).__init__()
         self.W = word_size
         self.N = memory_size
+        self.mem_size = memory_size
+        self.word_size = word_size
         self.num_reads = num_reads
         self.num_writes = write_heads
+        self.batch_size = batch_size
 
         self.softplus = nn.Softplus()
         self.sigmoid = nn.Sigmoid()
@@ -382,7 +398,7 @@ class DNCMemory(nn.Module):
         # This final line "unsorts" sorted_allocation, so that the indexing
         # corresponds to the original indexing of `usage`.
         #return util.batch_gather(sorted_allocation, inverse_indices)
-        return nonusage
+        return nonusage.unsqueeze(1)
 
 
     def write_allocation_weights(self, usage, write_gates):
@@ -433,10 +449,11 @@ class DNCMemory(nn.Module):
             inputs: Collection of inputs to the access module, including controls for
                 how to chose memory writing, such as the content to look-up and the
                 weighting between content-based and allocation-based addressing.
+
             memory: A tensor of shape  `[batch_size, memory_size, word_size]`
                 containing the current memory contents.
-            usage: Current memory usage, which is a tensor of shape `[batch_size,
-                memory_size]`, used for allocation-based addressing.
+            usage: Current memory usage, which is a tensor of shape `[batch_size, memory_size]`,
+            used for allocation-based addressing.
 
             Returns:
             tensor of shape `[batch_size, num_writes, memory_size]` indicating where
@@ -444,26 +461,29 @@ class DNCMemory(nn.Module):
             """
         print()
         print("write_weights")
-        alloc_gate, write_str, write_key, write_gate = inputs
 
+        alloc_gate, write_str, write_key, write_gate = inputs
         # c_t^{w, i} - The content-based weights for each write head.
         write_contnt_wghts = self._write_content_wght([memory, write_key, write_str])
 
         # a_t^i - The allocation weights for each write head.
-        #write_alloc_wghts = self.write_allocation_weights(usage, (alloc_gate * write_gate))
-        print(usage.size())
-
         write_alloc_wghts = self._allocation(usage)
-        print("alloc", alloc_gate.size())
-        print("alloc_wghts", write_alloc_wghts.size())
-        print("alloc", write_contnt_wghts.size())
+
+        assert list(memory.size()) == [self.batch_size, self.mem_size, self.word_size]
+        assert list(write_contnt_wghts.size()) == [self.batch_size, self.num_writes, self.mem_size]
+        assert list(write_alloc_wghts.size()) == [self.batch_size, self.num_writes, self.mem_size]
+
         # Expands gates over memory locations.
-        #alloc_gate = alloc_gate.unsqueeze(-1)
-        #write_gate = write_gate.unsqueeze(-1)
+        alloc_gate = alloc_gate.unsqueeze(-1)
+        write_gate = write_gate.unsqueeze(-1)
+        print(write_alloc_wghts.size())
 
         # w_t^{w, i} - The write weightings for each write head.
-        return write_gate * (alloc_gate * write_alloc_wghts + (1 - alloc_gate) * write_contnt_wghts)
+        result = write_gate * (alloc_gate * write_alloc_wghts +
+                  (1 - alloc_gate) * write_contnt_wghts)
 
+        assert list(result.size()) == [self.batch_size, self.num_writes, self.mem_size]
+        return result
 
     def directional_read_weights(self, link, prev_read_weights):
         """Calculates the forward or the backward read weights.
@@ -489,7 +509,9 @@ class DNCMemory(nn.Module):
         # read and write heads; hence we need to tile the read weights and do a
         # sort of "outer product" to get this.
         expanded_read_weights = torch.stack([prev_read_weights] * self.num_writes, 1)
-        result = expanded_read_weights.matmul(link)
+        print(expanded_read_weights.size())
+        print(link.size())
+        result = expanded_read_weights.bmm(link)
         # Swap dimensions 1, 2 so order is [batch, reads, writes, memory]:
         return result.permute(0, 2, 1, 3)
 
@@ -504,48 +526,92 @@ class DNCMemory(nn.Module):
             Args:
             inputs: Controls for this access module. This contains the content-based
                 keys to lookup, and the weightings for the different read modes.
+
             memory: A tensor of shape `[batch_size, memory_size, word_size]`
                 containing the current memory contents to do content-based lookup.
-            prev_read_weights: A tensor of shape `[batch_size, num_reads,
-                memory_size]` containing the previous read locations.
-            link: A tensor of shape `[batch_size, num_writes, memory_size,
-                memory_size]` containing the temporal write transition graphs.
+
+            prev_read_weights: A tensor `[batch_size, num_reads, memory_size]`
+                containing the previous read locations.
+
+            link: A tensor `[batch_size, num_writes, memory_size, memory_size]`
+                containing the temporal write transition graphs.
 
             Returns:
             A tensor of shape `[batch_size, num_reads, memory_size]` containing the
             read weights for each read head.
             """
-        #with tf.name_scope( 'read_weights', values=[inputs, memory, prev_read_weights, link]):
         read_keys, read_str, read_modes = inputs
+        print()
+        print("read_weights")
+   
+        assert list(memory.size()) == [self.batch_size, self.mem_size, self.word_size]
+        assert list(prev_read_weights.size()) == [self.batch_size, self.num_reads, self.mem_size]
+        assert list(link.size()) == [self.batch_size, self.num_writes, self.mem_size, self.mem_size]
 
         # c_t^{r, i} - The content weightings for each read head.
         content_weights = self._read_content_wght([memory, read_keys, read_str])
 
-        # Calculates f_t^i and b_t^i.
-        forward_weights = self.directional_read_weights(link, prev_read_weights.transpose(2, 3))
-        backward_weights = self.directional_read_weights(link, prev_read_weights)
+        assert list(content_weights.size()) == [self.batch_size, self.num_reads, self.mem_size]
 
-        backward_mode = read_modes[:, :, :self.num_writes]
-        forward_mode = read_modes[:, :, self.num_writes:2 * self.num_writes]
-        content_mode = read_modes[:, :, 2 * self.num_writes]
+        print(link.size())
+        # Calculates f_t^i and b_t^i.
+        #forward_weights = self.directional_read_weights(link, prev_read_weights.transpose(1, 2))
+        #backward_weights = self.directional_read_weights(link, prev_read_weights)
+        #tensor1 is a j x 1 x n x m Tensor and tensor2 is a k x m x p Tensor, out will be an j x k x n x p Tensor.
+        # [b, w, N, N] * [b, r, N]
+        forward_weights = prev_read_weights.unsqueeze(1).matmul(link)
+        backwrd_weights = prev_read_weights.matmul(link.transpose(2, 3))
+
+        backward_mode = read_modes[:, :, 0]
+        forward_mode = read_modes[:, :, 1]
+        content_mode = read_modes[:, :, 2]
+        print()
+        print(content_weights.size())
+        print(forward_weights.size())
+        print(backwrd_weights.size())
+        print(content_mode.size())
 
         content_str = content_mode.unsqueeze(2) * content_weights
         forward_str = (forward_mode.unsqueeze(3) * forward_weights).sum(2)
-        backwrd_str = (backward_mode.unsqueeze(3) * backward_weights).sum(2)
+        backwrd_str = (backward_mode.unsqueeze(3) * forward_weights).sum(2)
         return content_str + forward_str + backwrd_str
 
-    def _read_inputs(self, inputs):
-        pass
+    def _erase_and_write(self, memory, address, erase_vec, values):
+        """Module to erase and write in the external memory.
 
-    def interface_chunk(self, inputs, dim1, dim2, activation=None):
+            Erase operation:
+                M_t'(i) = M_{t-1}(i) * (1 - w_t(i) * e_t)
 
-        num = dim2 * dim1
-        #print(dim1, dim2)
-        output = inputs[:, 0:num]
-        rest = inputs[:, num:]
-        #print(output)
-        output = output.contiguous().view(-1, dim1, dim2)
-        return output, rest
+            Add operation:
+                M_t(i) = M_t'(i) + w_t(i) * a_t
+
+            where e are the erase_vec, w the write weights and a the values.
+
+            Args:
+                memory: 3-D tensor of   `[batch_size, memory_size, word_size]`.
+                address: 3-D tensor     `[batch_size, num_writes, memory_size]`.
+                erase_vec: 3-D tensor   `[batch_size, num_writes, word_size]`.
+                values: 3-D tensor      `[batch_size, num_writes, word_size]`.
+
+            Returns:
+                3-D tensor of shape `[batch_size, num_writes, word_size]`.
+            """
+        assert list(memory.size()) == [self.batch_size, self.mem_size, self.word_size]
+        assert list(address.size()) == [self.batch_size, self.num_writes, self.mem_size]
+        assert list(erase_vec.size()) == [self.batch_size, self.num_writes, self.word_size]
+        assert list(values.size()) == [self.batch_size, self.num_writes, self.word_size]
+
+        expand_address = address.unsqueeze(3)
+        erase_vec = erase_vec.unsqueeze(2)
+
+        weighted_resets = expand_address * erase_vec
+        weighted_resets = 1 - weighted_resets
+        reset_gate = weighted_resets.prod(1)
+        memory = memory * reset_gate
+
+        add_matrix = address.transpose(1, 2).bmm(values)
+        memory += add_matrix
+        return memory
 
     def forward(self, inputs, prev_state):
         """ forward
@@ -554,38 +620,31 @@ class DNCMemory(nn.Module):
         print("access")
 
         [read_keys, read_str, write_key, write_str,
-        erase_vec, write_vec, free_gates, alloc_gate,
-                write_gate, read_modes] = inputs
+         erase_vec, write_vec, free_gates, alloc_gate, write_gate, read_modes] = inputs
+
         prev_memory, prev_read_wghts, prev_write_weights, prev_linkage, prev_usage = prev_state
+        assert list(prev_memory.size()) == [self.batch_size, self.N, self.W]
 
-
-        #print(self.parts)
-
-        read_str = 1 + self.softplus(read_str)
-        erase_vec = self.sigmoid(erase_vec)
-        free_gates = self.sigmoid(free_gates.squeeze(-1))
-        alloc_gate = self.sigmoid(alloc_gate)
-        write_gate = self.sigmoid(write_gate)
-        print("read_modes", read_modes.size())
-        print("free_gates", free_gates.size())
+        # forward pass
         # 1 Update usage using inputs['free_gate'] and previous read & write weights.
         usage = usage = self._usage(prev_write_weights, free_gates, prev_read_wghts, prev_usage)
-        print("usage", usage.size())
+
         # 2 Get Write weights
         write_inputs = [alloc_gate, write_str, write_key, write_gate]
         write_weights = self._write_weights(write_inputs, prev_memory, usage)
-        print("write_wghts", write_weights.size())
+
         # 3 Write to memory.
-        memory = erase_and_write(prev_memory, write_weights, erase_vec, write_vec)
+        memory = self._erase_and_write(prev_memory, write_weights, erase_vec, write_vec)
 
         # 4 update linkage
         linkage_state = self._linkage(write_weights, prev_linkage)
         links, _ = linkage_state
 
+        #############
         # 5 read from memory
         read_inputs = [read_keys, read_str, read_modes]
         read_weights = self._read_weights(read_inputs, memory, prev_read_wghts, links)
-
+        #############
         # 6 read memory
         read_words = read_weights.matmul(memory)
 
@@ -602,20 +661,16 @@ class InterFace(nn.Module):
         self.batch_softmax = BatchSoftmax()
         self.softplus = nn.Softplus()
         self.sigmoid = nn.Sigmoid()
-        #self.
 
     def _chunk1(self, inputs, dim1, activation=None):
-        #print(dim1, dim2)
         output = inputs[:, :dim1]
         rest = inputs[:, dim1:]
-        #output = output.contiguous().view(-1, dim1, dim2)
         if activation is not None:
             output = activation(output)
         return output, rest
 
     def _chunk2(self, inputs, dim1, dim2, activation=None):
         num = dim2 * dim1
-        #print(dim1, dim2)
         output = inputs[:, 0:num]
         rest = inputs[:, num:]
         output = output.contiguous().view(-1, dim1, dim2)
@@ -623,23 +678,32 @@ class InterFace(nn.Module):
             output = activation(output)
         return output, rest
 
+    def chunk(self, inputs, dim, activation=None):
+        if len(dim) == 1:
+            return self._chunk1(inputs, dim[0], activation)
+        else:
+            dim1, dim2 = dim
+            return self._chunk2(inputs, dim1, dim2, activation)
+
     def forward(self, inputs):
-        read_keys, rest = self._chunk2(inputs, self.num_reads, self.word_size)
-        read_str, rest = self._chunk1(rest, self.num_reads)
+        print()
+        print("INTERFACE", inputs.size())
+        read_keys, rest = self.chunk(inputs, [self.num_reads, self.word_size])
+        read_strn, rest = self.chunk(rest, [self.num_reads])
 
-        write_key, rest = self._chunk2(rest, self.num_writes, self.word_size)
-        write_str, rest = self._chunk1(rest, self.num_writes)
+        write_key, rest = self.chunk(rest, [self.num_writes, self.word_size])
+        write_str, rest = self.chunk(rest, [self.num_writes])
 
-        erase_vec, rest = self._chunk2(rest, self.num_writes, self.word_size, self.sigmoid)
-        write_vec, rest = self._chunk2(rest, self.num_writes, self.word_size)
+        erase_vec, rest = self.chunk(rest, [self.num_writes, self.word_size], self.sigmoid)
+        write_vec, rest = self.chunk(rest, [self.num_writes, self.word_size])
 
-        free_gates, rest = self._chunk1(rest, self.num_reads, self.sigmoid)
-        alloc_gate, rest = self._chunk1(rest, self.num_writes, self.sigmoid)
-        write_gate, rest = self._chunk1(rest, self.num_writes, self.sigmoid)
+        free_gates, rest = self.chunk(rest, [self.num_reads], self.sigmoid)
+        alloc_gate, rest = self.chunk(rest, [self.num_writes], self.sigmoid)
+        write_gate, rest = self.chunk(rest, [self.num_writes], self.sigmoid)
 
-        read_modes, _ = self._chunk2(rest, self.num_reads, 3, self.batch_softmax)
+        read_modes, _ = self.chunk(rest, [self.num_reads, 3], self.batch_softmax)
 
-        return [read_keys, read_str, write_key, write_str,
+        return [read_keys, read_strn, write_key, write_str,
                 erase_vec, write_vec, free_gates, alloc_gate,
                 write_gate, read_modes]
 
@@ -662,7 +726,9 @@ class DNC(nn.Module):
                                       num_layers=num_layers,
                                       output_size=self.interface_size + word_len,
                                       batch_size=batch_size)
-        self._Memory = DNCMemory(word_size=word_len, memory_size=memory_size, num_reads=num_read_heads)
+        self._memory = DNCMemory(word_size=word_len, memory_size=memory_size,
+                                 batch_size=batch_size,
+                                 num_reads=num_read_heads)
 
 
     def forward(self, inputs, previous_state):
@@ -692,7 +758,7 @@ class DNC(nn.Module):
         interface = self._interface(controller_output)
         #read_weights, interface = controller_output
         #print("controller out", read_weights.size(), interface.size())
-        access_output, access_state = self._Memory(interface, prev_access_state)
+        access_output, access_state = self._memory(interface, prev_access_state)
 
         print("access_out", access_output.size())
         output = torch.cat([controller_output, access_output], 1)
