@@ -1,5 +1,10 @@
 .vscode
+.git
+.idea
+.gitignore
 __pycache__
 runs
 old
 models
+misc
+images

@@ -2,8 +2,25 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
+import pickle
 
 eps = 10e-6
+
+def repackage(xs):
+    """Wraps hidden states in new Variables, to detach them from their history."""
+    if type(xs) == Variable:
+        return Variable(xs.data)
+    else:
+        return tuple(repackage(v) for v in xs)
+
+def depackage(xs):
+    """Wraps hidden states in new Variables, to detach them from their history."""
+    if type(xs) == Variable:
+        return xs.data
+    elif type(xs) == torch.Tensor:
+        return xs
+    else:
+        return tuple(depackage(v) for v in xs)
 
 def interface_part(num_reads, W):
                     #read_keys
@@ -16,9 +33,20 @@ def interface_part(num_reads, W):
         cntr += idx
     return ds
 
-def oneplus(x):
-    return 1 + torch.log(1 + e ** x)
 
+def running_avg(cum_correct, cum_total_move, last=-100):
+    return sum(cum_correct[last:]) / sum(cum_total_move[last:])
+
+
+def flat(container):
+    acc = []
+    for i in container:
+        if isinstance(i, (list, tuple)):
+            for j in flat(i):
+                acc.append(j)
+        else:
+            acc.append(i)
+    return acc
 
 
 def show(tensors, m=""):
@@ -30,77 +58,56 @@ def show(tensors, m=""):
         [print(t.size()) for t in tensors]
 
 
-def erase_and_write(memory, address, erase_vec, values):
-    """Module to erase and write in the external memory.
+def dnc_checksum(state):
+    return [state[i].data.sum() for i in range(6)]
 
-        Erase operation:
-            M_t'(i) = M_{t-1}(i) * (1 - w_t(i) * e_t)
-
-        Add operation:
-            M_t(i) = M_t'(i) + w_t(i) * a_t
-
-        where e are the erase_vec, w the write weights and a the values.
-
-        Args:
-            memory: 3-D tensor of shape `[batch_size, memory_size, word_size]`.
-            address: 3-D tensor `[batch_size, num_writes, memory_size]`.
-            erase_vec: 3-D tensor `[batch_size, num_writes, word_size]`.
-            values: 3-D tensor `[batch_size, num_writes, word_size]`.
-
-        Returns:
-            3-D tensor of shape `[batch_size, num_writes, word_size]`.
-        """
-    
-    show([memory, address, erase_vec, values])
-    #expand_address = address #.unsqueeze(3)
-    print("memory    ", memory.size())
-    print("address   ", address.size())
-    print("erase_vec ", erase_vec.size())
-    print("values    ", values.size())
-    
-
-    #reset_weights = reset_weights.unsqueeze(2)
-
-    
-    weighted_resets =  address * erase_vec
-    weighted_resets = 1 - weighted_resets
-    reset_gate = weighted_resets.prod(1)
-    memory *= reset_gate
-
-    add_matrix = address.bmm(values)
-    memory += add_matrix
-    return memory
-
-"""
-def allocation_weighting(usage_vec, batch_size, num_words ):
-    #sorted usage - the usage vector sorted ascndingly
-    #the original indices of the sorted usage vector
-    sorted_usage_vec, free_list = torch.top_k(-1 * usage_vec)
-    sorted_usage_vec *= -1
-    cumprod = torch.bmm(sorted_usage_vec, 1)
-    unorder = (1-sorted_usage_vec) * cumprod
-
-    alloc_weights = tf.zeros([batch_size, num_words])
-    I = tf.constant(np.identity(num_words, dtype=np.float32))
-        
-    #for each usage vec
-    for pos, idx in enumerate(tf.unstack(free_list[0])):
-            #flatten
-        m = tf.squeeze(tf.slice(I, [idx, 0], [1, -1]))
-        #add to weight matrix
-        alloc_weights += m*unorder[0, pos]
-        #the allocation weighting for each row in memory
-    return tf.reshape(alloc_weights, [num_words, 1])
+def save(model, optimizer, time_stmp, args, itr):
+    # out, mem, r_wghts, w_wghts, links, l_wghts, usage, (ho, hc) = state
+    name =  str(time_stmp) + args.save + str(itr) + '.pkl'
+    torch.save(model.state_dict(), args.prefix + 'models/dnc_model_' + name)
+    torch.save(optimizer.state_dict(), args.prefix + 'models/optimizer_' + name)
+    print("Saving ... checksum {}, file {}".format(dnc_checksum(state), str(time_stmp) + args.save + str(itr) ))
 
 
+def get_prediction(expanded_logits, idxs='all'):
+    max_idxs = []
+    if idxs == 'all':
+        idxs = range(len(expanded_logits))
+    for idx in idxs:
+        _, pidx = expanded_logits[idx].data.topk(1)
+        max_idxs.append(pidx.squeeze()[0])
+    return tuple(max_idxs)
 
+def to_human_readable(input, mask):
+    # phase = gen.PHASES[mask]
+    # expr = data.ix_to_expr(inputs)
+    pass
 
+def correct(pred, best_actions):
+    #action_own = [pred[0], (pred[1], pred[2]), (pred[3], pred[4]), (pred[5], pred[6])]
+    #correct = action_own in best_actions
+    pass
 
-def content_lookup(self, memory, key, weights):
-    norm_mem = memory.norm(p=2, dim=1)
-    norm_key = key.norm(0)
-    sim = norm_mem.dot(norm_key)
-    #str is 1*1 or 1*R
-    #returns similarity measure
-    return F.softmax(sim * weights, 0)
-"""
+def human_readable_res(Data, all_actions, best_actions, chosen_action, pred, Guided, loss_data):
+    base_prob = 1 / len(all_actions)
+
+    action_own = [pred[0], (pred[1], pred[2]), (pred[3], pred[4]), (pred[5], pred[6])]
+    correct = action_own in best_actions
+    best = 0
+    action_der = None
+    for action in [flat(a) for a in best_actions]:
+        scores = [1 if pred[i] == action[i] else 0 for i in range(len(pred))]
+        if sum(scores) >= best:
+            best, action_der = sum(scores), scores
+
+    # print(Data.one_hot_size)
+    best_move_exprs = [Data.vec_to_expr(t) for t in best_actions]
+    all_move_exprs = [Data.vec_to_expr(t) for t in all_actions]
+    chos_move, crest = Data.vec_to_expr(action_own)
+    # print("all     {}".format(', '.join(["{} {}".format(m[0], m[1]) for m in all_move_exprs])))
+    print("best    {}".format(', '.join(["{} {}".format(m[0], m[1]) for m in best_move_exprs])))
+    print("chosen: {} {}, guided {},  prob {:0.2f}, T? {}---loss {:0.4f}".format(
+        chos_move, crest, Guided, base_prob, correct, loss_data
+    ))
+    return action_der
+
