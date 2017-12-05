@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
-import pickle
+import pickle, os, glob
 
 eps = 10e-6
 
@@ -58,15 +58,29 @@ def show(tensors, m=""):
         [print(t.size()) for t in tensors]
 
 
+def clean_runs(dirs, lim=10):
+    def convert_bytes(num):
+        for x in ['bytes', 'KB', 'MB']:
+            if num < 1024.0:
+                return "%3.1f %s" % (num, x)
+            num /= 1024.0
+    for d in glob.glob(dirs + '*'):
+        if convert_bytes(os.stat(d).st_size) < lim:
+            os.remove(d)
+
+
 def dnc_checksum(state):
     return [state[i].data.sum() for i in range(6)]
 
-def save(model, optimizer, time_stmp, args, itr):
+def save(model, optimizer, lstm_state, time_stmp, args, itr):
     # out, mem, r_wghts, w_wghts, links, l_wghts, usage, (ho, hc) = state
     name =  str(time_stmp) + args.save + str(itr) + '.pkl'
     torch.save(model.state_dict(), args.prefix + 'models/dnc_model_' + name)
+    torch.save(model, args.prefix + 'models/dnc_model_full_' + name)
+    torch.save(lstm_state, args.prefix + 'models/lstm_state_' + name)
     torch.save(optimizer.state_dict(), args.prefix + 'models/optimizer_' + name)
-    print("Saving ... checksum {}, file {}".format(dnc_checksum(state), str(time_stmp) + args.save + str(itr) ))
+    torch.save(optimizer, args.prefix + 'models/optimizer_full_' + name)
+    print("Saving ... file {}".format( str(time_stmp) + args.save + str(itr) ))
 
 
 def get_prediction(expanded_logits, idxs='all'):

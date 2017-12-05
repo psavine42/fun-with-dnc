@@ -759,20 +759,24 @@ class DNC(nn.Module):
             `controller_state` is a tuple of controller module's state
             """
         return [Variable(torch.zeros(self.batch_size, self.num_reads, self.word_len), requires_grad=grad),
-                 Variable(torch.zeros(self.batch_size, self.mem_size, self.word_len), requires_grad=grad), #memory
-                 Variable(torch.zeros(self.batch_size, self.num_reads, self.mem_size), requires_grad=grad), #read_weights
-                 Variable(torch.zeros(self.batch_size, self.num_writes, self.mem_size), requires_grad=grad), #write weights
-                 Variable(torch.zeros(self.batch_size, self.num_writes, self.mem_size, self.mem_size), requires_grad=grad),  #linkage
-                 Variable(torch.zeros(self.batch_size, self.num_writes, self.mem_size), requires_grad=grad), #linkage weight
-                 Variable(torch.zeros(self.batch_size, self.mem_size), requires_grad=grad), #usage
-                [Variable(torch.randn(self.num_layers, self.batch_size, self.hidden_size), requires_grad=grad),
-                 Variable(torch.randn(self.num_layers, self.batch_size, self.hidden_size), requires_grad=grad)]]
+                Variable(torch.zeros(self.batch_size, self.mem_size, self.word_len), requires_grad=grad), #memory
+                Variable(torch.zeros(self.batch_size, self.num_reads, self.mem_size), requires_grad=grad), #read_weights
+                Variable(torch.zeros(self.batch_size, self.num_writes, self.mem_size), requires_grad=grad), #write weights
+                Variable(torch.zeros(self.batch_size, self.num_writes, self.mem_size, self.mem_size), requires_grad=grad),  #linkage
+                Variable(torch.zeros(self.batch_size, self.num_writes, self.mem_size), requires_grad=grad), #linkage weight
+                Variable(torch.zeros(self.batch_size, self.mem_size), requires_grad=grad)] #usage
+                #[Variable(torch.randn(self.num_layers, self.batch_size, self.hidden_size), requires_grad=grad),
+                #  Variable(torch.randn(self.num_layers, self.batch_size, self.hidden_size), requires_grad=grad)]]
+
+    def init_rnn(self, grad=True):
+        return [Variable(torch.ones(self.num_layers, self.batch_size, self.hidden_size) *.5, requires_grad=False),
+                Variable(torch.ones(self.num_layers, self.batch_size, self.hidden_size) *.5, requires_grad=False)]
 
     @property
     def memory(self):
         return self._memory
 
-    def forward(self, inputs, previous_state):
+    def forward(self, inputs, prev_controller_state, previous_state):
         """
             `input`          [batch_size, seq_len, word_size]
             `access_output`
@@ -790,10 +794,10 @@ class DNC(nn.Module):
                 :tuple of controller module's state
 
             """
-        o, m, rw, ww, l, lw, u, prev_controller_state = previous_state
+        o, m, rw, ww, l, lw, u = previous_state
 
         prev_access_output = o.view(-1, self.num_reads * self.word_len)
-        # print(inputs.size(), prev_access_output.size())
+
         control_input = torch.cat([inputs, prev_access_output], 1)
         # print(control_input.size())
         control_output, controller_state = self.controller(control_input, prev_controller_state)
@@ -807,7 +811,7 @@ class DNC(nn.Module):
         output = torch.cat([control_output, access_output_v], 1)
         output_f = self.nn_output(output)
         # print(output.size())
-        return output_f, [access_output_v, m, rw, ww, l, lw, u, controller_state]
+        return output_f, [access_output_v, m, rw, ww, l, lw, u], controller_state
 
 
 def require_nonleaf_grad(v):

@@ -14,44 +14,45 @@ import os
 import losses as L
 import training as tfn
 random.seed()
+from collections import defaultdict
+from arg import args, start
 
+# parser = argparse.ArgumentParser(description='Hyperparams')
+# parser.add_argument('--act', nargs='?', type=str, default='train', help='[]')
+# parser.add_argument('--load', nargs='?', type=str, default='', help='load model and state')
+# parser.add_argument('--save', nargs='?', type=str, default='', help='save if true')
+# parser.add_argument('--beta', nargs='?', type=float, default=0.8, help='mixture param from paper')
+# parser.add_argument('--log', nargs='?', type=int, default=1, help='summaries in tb')
+# parser.add_argument('--typed', nargs='?', type=int, default=1, help='summaries in tb')
+# parser.add_argument('--max_ents', nargs='?', type=int, default=6, help='summaries in tb')
+# parser.add_argument('--opt', type=str, default='adam')
+# parser.add_argument('--algo', type=str, default='dnc')
+# parser.add_argument('--feed_last', type=int, default=1, help='')
 
-parser = argparse.ArgumentParser(description='Hyperparams')
-parser.add_argument('--act', nargs='?', type=str, default='train', help='[]')
-parser.add_argument('--load', nargs='?', type=str, default='', help='load model and state')
-parser.add_argument('--save', nargs='?', type=str, default='', help='save if true')
-parser.add_argument('--beta', nargs='?', type=float, default=0.8, help='mixture param from paper')
-parser.add_argument('--log', nargs='?', type=int, default=1, help='summaries in tb')
-parser.add_argument('--typed', nargs='?', type=int, default=1, help='summaries in tb')
-parser.add_argument('--max_ents', nargs='?', type=int, default=6, help='summaries in tb')
-parser.add_argument('--opt', type=str, default='adam')
-parser.add_argument('--algo', type=str, default='dnc')
-parser.add_argument('--feed_last', type=int, default=1, help='')
+# parser.add_argument('--opt_at', type=str, default='problem', help='')
+# parser.add_argument('--zero_at', type=str, default='step', help='')
 
-parser.add_argument('--opt_at', type=str, default='problem', help='')
-parser.add_argument('--zero_at', type=str, default='step', help='')
+# parser.add_argument('--ret_graph', type=int, default=1, help='')
+# parser.add_argument('--rpkg_step', type=int, default=1, help='')
 
-parser.add_argument('--ret_graph', type=int, default=1, help='')
-parser.add_argument('--rpkg_step', type=int, default=1, help='')
-
-    # parser.add_argument('--num_tests', type=int, default=0, help='')
-parser.add_argument('--num_tests', type=int, default=2, help='')
-parser.add_argument('--num_repeats', type=int, default=2, help='')
-parser.add_argument('--env', type=str, default='', help='')
-parser.add_argument('--checkpoint_every', type=int, default=1000, help='')
-parser.add_argument('--n_phases', type=int, default=15)
-parser.add_argument('--n_cargo', type=int, default=2)
-parser.add_argument('--n_plane', type=int, default=2)
-parser.add_argument('--n_airport', type=int, default=2)
-parser.add_argument('--lr', type=float, default=1e-5) #1e-5 in paper.
-parser.add_argument('--iters', nargs='?', type=int, default=21, help='number of iterations')
-args = parser.parse_args()
+#     # parser.add_argument('--num_tests', type=int, default=0, help='')
+# parser.add_argument('--num_tests', type=int, default=2, help='')
+# parser.add_argument('--num_repeats', type=int, default=2, help='')
+# parser.add_argument('--env', type=str, default='', help='')
+# parser.add_argument('--checkpoint_every', type=int, default=1000, help='')
+# parser.add_argument('--n_phases', type=int, default=15)
+# parser.add_argument('--n_cargo', type=int, default=2)
+# parser.add_argument('--n_plane', type=int, default=2)
+# parser.add_argument('--n_airport', type=int, default=2)
+# parser.add_argument('--lr', type=float, default=1e-5) #1e-5 in paper.
+# parser.add_argument('--iters', nargs='?', type=int, default=21, help='number of iterations')
+# args = parser.parse_args()
 
 #
 
 batch_size = 1
-start_timer = time.time()
-start = '{:0.0f}'.format(start_timer)
+# start_timer = time.time()
+# start = '{:0.0f}'.format(start_timer)
 PASSING = 0.85
 
 
@@ -67,7 +68,6 @@ def generate_data_spec(args, num_ents=2, solve=True):
         ix_state = args.max_ents * 3
         ix_size = [ix_state, ix_state, ix_state]
         encoding = 1
-    
     return {'num_plane': num_ents, 'num_cargo': num_ents, 'num_airport': num_ents,
             'one_hot_size': ix_size, 'plan_phase': num_ents * 3,
             'batch_size': 1, 'encoding': encoding, 'solve': solve, 'mapping': None}
@@ -103,7 +103,7 @@ def setupDNC(args):
     print('dnc_args:\n', dnc_args, '\n')
     if args.load == '':
         Dnc = dnc.DNC(**dnc_args)
-        optimizer = optim.Adam([{'params': Dnc.parameters()}], lr=args.lr)
+        optimizer = optim.Adam(Dnc.parameters(), lr=args.lr)
     else:
         model_path = args.prefix + '/models/dnc_model_' + args.load
         print('loading', model_path)
@@ -111,14 +111,15 @@ def setupDNC(args):
         Dnc.load_state_dict(torch.load(model_path))
 
         optim_path = args.prefix + '/models/dnc_model_' + args.load
-        optimizer = optim.Adam([{'params': Dnc.parameters()}], lr=args.lr)
+        optimizer = optim.Adam([Dnc.parameters()], lr=args.lr)
         if os.path.exists(optim_path):
-            optimizer.load_state_dict(torch.load(optim_path))
+            # optimizer = optim.Adam
+            dict_ = {'params': torch.load(optim_path)}
+            optimizer.load_state_dict(dict_)
             optimizer.state = defaultdict(dict, optimizer.state)
 
-    o, m, r, w, l, lw, u, (ho, hc) = Dnc.init_state()
-    dnc_state = (o, m, r, w, l, lw, u, (ho, hc))
-    return data, Dnc, optimizer, dnc_state
+    lstm_state = Dnc.init_rnn()
+    return data, Dnc, optimizer, lstm_state
 
 
 def tick(n_total, n_correct, truth, pred):
@@ -195,7 +196,7 @@ def train_qa2(args, data, DNC, optimizer):
     return DNC, optimizer, dnc_state, running_avg(cum_correct, cum_total)
 
 
-def train_plan(args, data, DNC, optimizer):
+def train_plan(args, data, DNC, lstm_state, optimizer):
     """
         Things to test after some iterations:
          - on planning phase and on
@@ -205,28 +206,28 @@ def train_plan(args, data, DNC, optimizer):
         :return:
         """
     criterion = nn.CrossEntropyLoss()
-    cum_correct, cum_total = [], []
-    n_success = 0
+    cum_correct, cum_total, prob_times, n_success = [], [], [], 0
 
     for trial in range(args.iters):
-
+        start_prob = time.time()
         phase_masks = data.make_new_problem()
         n_total, n_correct, prev_action, loss, stats = 0, 0, None, 0, []
         dnc_state = DNC.init_state(grad=False)
+        lstm_state = DNC.init_rnn(grad=False) # lstm_state, 
         optimizer.zero_grad()
 
         for phase_idx in phase_masks:
 
             if phase_idx == 0 or phase_idx == 1:
                 inputs = Variable(data.getitem_combined())
-                logits, dnc_state = DNC(inputs, dnc_state)
+                logits, dnc_state, lstm_state = DNC(inputs, lstm_state, dnc_state)
                 _, prev_action = data.strip_ix_mask(logits)
 
             elif phase_idx == 2:
-                mask = data.getmask()
+                mask = Variable(data.getmask())
                 # print(prev_action)
-                inputs = Variable(torch.cat([mask, prev_action.data], 1))
-                logits, dnc_state = DNC(inputs, dnc_state)
+                inputs = torch.cat([mask, prev_action], 1)
+                logits, dnc_state, lstm_state = DNC(inputs, lstm_state, dnc_state)
                 _, prev_action = data.strip_ix_mask(logits)
 
             else:
@@ -238,9 +239,9 @@ def train_plan(args, data, DNC, optimizer):
                 if args.zero_at == 'step':
                     optimizer.zero_grad()
 
-                mask = data.getmask()
-                final_inputs = Variable(torch.cat([mask, u.depackage(prev_action)], 1))
-                logits, dnc_state = DNC(final_inputs, dnc_state)
+                mask = Variable(data.getmask())
+                final_inputs = torch.cat([mask, prev_action], 1)
+                logits, dnc_state, lstm_state = DNC(final_inputs, lstm_state, dnc_state)
                 exp_logits = data.ix_input_to_ixs(logits)
 
                 guided = random.random() < args.beta
@@ -263,10 +264,7 @@ def train_plan(args, data, DNC, optimizer):
                                                        final_action, action_own, guided, lstep.data[0])
                     stats.append(action_accs)
                 n_total, _ = tick(n_total, n_correct, action_own, flat(final_action))
-                # print([flat(t) for t in targets_star] )
-                #print('OWN  ', action_own)
                 n_correct += 1 if action_own in [tuple(flat(t)) for t in targets_star] else 0
-
                 # feed own outputs, or feed final action?
                 prev_action = data.vec_to_ix(final_action)
 
@@ -285,21 +283,22 @@ def train_plan(args, data, DNC, optimizer):
         n_success += 1 if n_correct / n_total > PASSING else 0
         cum_total.append(n_total)
         cum_correct.append(n_correct)
-        sl.writer.add_scalar('recall.pct_correct', n_correct / n_total, sl.global_step)
-        print("trial {}, step {} trial accy: {}/{}, {:0.4f}, running total {}/{}, running avg {}, loss {:0.4f}  ".format(
+        sl.add_scalar('recall.pct_correct', n_correct / n_total, sl.global_step)
+        print("trial {}, step {} trial accy: {}/{}, {:0.2f}, running total {}/{}, running avg {:0.4f}, loss {:0.4f}  ".format(
             trial, sl.global_step, n_correct, n_total, n_correct / n_total, n_success, trial,
             running_avg(cum_correct, cum_total), loss.data[0]
             ))
-
+        end_prob = time.time()
+        prob_times.append(start_prob - end_prob)
     print("solved {} out of {} -> {}".format(n_success, args.iters, n_success / args.iters))
-    return DNC, optimizer, dnc_state, running_avg(cum_correct, cum_total)
+    return DNC, optimizer, lstm_state, running_avg(cum_correct, cum_total)
 
 
 def train_manager(args, train_fn):
     datspec = generate_data_spec(args)
     print('\n', datspec)
 
-    _, DNC, optimizer, dnc_state = setupDNC(args)
+    _, DNC, optimizer, lstm_state = setupDNC(args)
     start_ents = 2
     print(DNC)
 
@@ -311,13 +310,13 @@ def train_manager(args, train_fn):
 
         print("beginning new training Size: {}".format(test_size))
         for train_epoch in range(args.n_phases):
-            print("epoch {}, chksum {}".format(train_epoch, dnc_checksum(dnc_state)))
+            print("\n \n epoch {}".format(train_epoch))
+            DNC, optimizer, lstm_state, score = train_fn(args, data_loader, DNC, lstm_state, optimizer)
+            if (train_epoch + 1) % args.checkpoint_every and args.save != '':
+                id_str = '_s{}_ep_{}_gl_{}'.format(test_size, train_epoch, sl.global_step)
+                save(DNC, optimizer, lstm_state, start, args, id_str)
 
-            DNC, optimizer, dnc_state, score = train_fn(args, data_loader, DNC, optimizer)
-            id_str = '_s{}_ep_{}_gl_{}'.format(test_size, train_epoch, sl.global_step)
-            save(DNC, optimizer, start, args, id_str)
-
-            print('finished training epoch {}, score:{}, file {}{}'.format(train_epoch, score))
+            print('finished training epoch {}, score:{}'.format(train_epoch, score))
             if score > PASSING:
                 print('model_successful: {}, {} '.format(score, train_epoch))
                 passing = True
@@ -335,18 +334,18 @@ def train_manager(args, train_fn):
 # python run.py --act dag --max_ents 6 --opt adam --save _new_hidden --ret_graph False --opt_at step
 if __name__=="__main__":
 
-    args.repakge_each_step = True if args.rpkg_step == 1 else False
-    args.ret_graph = True if args.ret_graph == 1 else False
-    sl.log_step += args.log
+    # args.repakge_each_step = True if args.rpkg_step == 1 else False
+    # args.ret_graph = True if args.ret_graph == 1 else False
+    # sl.log_step += args.log
 
-    args.prefix = '/output/' if args.env == 'floyd' else './'
-    if not os.path.exists(args.prefix + 'models'):
-        os.mkdir(args.prefix + 'models')
+    # args.prefix = '/output/' if args.env == 'floyd' else './'
+    # if not os.path.exists(args.prefix + 'models'):
+    #     os.mkdir(args.prefix + 'models')
 
-    if args.save != '':
-        f = open(args.prefix + 'models/params_' + str(start) + str(args.save) + '.txt', 'w')
-        f.write(str(args))
-        f.close()
+    # if args.save != '':
+    #     f = open(args.prefix + 'models/params_' + str(start) + str(args.save) + '.txt', 'w')
+    #     f.write(str(args))
+    #     f.close()
 
     print(args)
     if args.act == 'plan':
