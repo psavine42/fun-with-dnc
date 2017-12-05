@@ -11,6 +11,7 @@ parser.add_argument('--lr', type=float, default=1e-5) #1e-5 in paper.
 parser.add_argument('--checkpoint_every', type=int, default=1000, help='')
 parser.add_argument('--log', nargs='?', type=int, default=0, help='summaries in tb')
 parser.add_argument('--notes', nargs='?', type=str, default='', help='any notes')
+
 ########### Algorithm and Optimizer ##############
 parser.add_argument('--opt', type=str, default='adam')
 parser.add_argument('--algo', type=str, default='dnc')
@@ -30,6 +31,7 @@ parser.add_argument('--n_airport', type=int, default=2)
 parser.add_argument('--typed', nargs='?', type=int, default=1, help='summaries in tb')
 
 ########### PROBLEM CONTROL ##############
+parser.add_argument('--passing', type=float, default=0.9, help='')
 parser.add_argument('--num_tests', type=int, default=2, help='')
 parser.add_argument('--num_repeats', type=int, default=2, help='')
 parser.add_argument('--max_ents', nargs='?', type=int, default=6, help='summaries in tb')
@@ -69,7 +71,6 @@ if args.log > 0:
 
 #floyd run --env pytorch-0.2 --tensorboard  "bash setup.sh && python run.py --act run --opt_at problem --ret_graph 0 --env floyd --save _nopkg --n_phases 2 --iters 10000"
 #python run.py --act run --opt_at problem --ret_graph 0  --save _nopkg --n_phases 2 --iters 10000
-
 
 # QA training
 #floyd run --env pytorch-0.2 --tensorboard "bash setup.sh && python run.py --act dag --iters 1000 --save _new_hidden --ret_graph 1 --opt_at step --env floyd"

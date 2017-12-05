@@ -339,7 +339,6 @@ class AirCargoData():
                 solution = self.search_fn(self.current_problem)
                 actions_exprs = solution.solution()[0:len(self.current_problem.planes)]
              #  self.cache[state_hash] = actions_exprs
-             
         return [self.expr_to_vec(a) for a in actions_exprs]
 
 
@@ -347,6 +346,9 @@ class AirCargoData():
         return torch.from_numpy(self.current_problem.encode_action(action_obj)).long()
 
     def send_action(self, action_vec):
+        """
+        Transform vector into an expression compatible with the problem code.
+        """
         self.current_problem.initial = self.STATE
         sym, args = self.vec_to_expr(action_vec)
 

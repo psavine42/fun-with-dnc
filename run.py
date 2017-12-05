@@ -17,47 +17,14 @@ random.seed()
 from collections import defaultdict
 from arg import args, start
 
-# parser = argparse.ArgumentParser(description='Hyperparams')
-# parser.add_argument('--act', nargs='?', type=str, default='train', help='[]')
-# parser.add_argument('--load', nargs='?', type=str, default='', help='load model and state')
-# parser.add_argument('--save', nargs='?', type=str, default='', help='save if true')
-# parser.add_argument('--beta', nargs='?', type=float, default=0.8, help='mixture param from paper')
-# parser.add_argument('--log', nargs='?', type=int, default=1, help='summaries in tb')
-# parser.add_argument('--typed', nargs='?', type=int, default=1, help='summaries in tb')
-# parser.add_argument('--max_ents', nargs='?', type=int, default=6, help='summaries in tb')
-# parser.add_argument('--opt', type=str, default='adam')
-# parser.add_argument('--algo', type=str, default='dnc')
-# parser.add_argument('--feed_last', type=int, default=1, help='')
-
-# parser.add_argument('--opt_at', type=str, default='problem', help='')
-# parser.add_argument('--zero_at', type=str, default='step', help='')
-
-# parser.add_argument('--ret_graph', type=int, default=1, help='')
-# parser.add_argument('--rpkg_step', type=int, default=1, help='')
-
-#     # parser.add_argument('--num_tests', type=int, default=0, help='')
-# parser.add_argument('--num_tests', type=int, default=2, help='')
-# parser.add_argument('--num_repeats', type=int, default=2, help='')
-# parser.add_argument('--env', type=str, default='', help='')
-# parser.add_argument('--checkpoint_every', type=int, default=1000, help='')
-# parser.add_argument('--n_phases', type=int, default=15)
-# parser.add_argument('--n_cargo', type=int, default=2)
-# parser.add_argument('--n_plane', type=int, default=2)
-# parser.add_argument('--n_airport', type=int, default=2)
-# parser.add_argument('--lr', type=float, default=1e-5) #1e-5 in paper.
-# parser.add_argument('--iters', nargs='?', type=int, default=21, help='number of iterations')
-# args = parser.parse_args()
-
-#
 
 batch_size = 1
-# start_timer = time.time()
-# start = '{:0.0f}'.format(start_timer)
-PASSING = 0.85
-
-
-dnc_args = {'num_layers': 2, 'num_read_heads': 2, 'hidden_size': 250,
-            'num_write_heads': 1, 'memory_size': 100, 'batch_size': batch_size}
+dnc_args = {'num_layers': 2,
+            'num_read_heads': 2,
+            'hidden_size': 250,
+            'num_write_heads': 1,
+            'memory_size': 100,
+            'batch_size': batch_size }
 
 
 def generate_data_spec(args, num_ents=2, solve=True):
@@ -78,17 +45,16 @@ def setupLSTM(args):
     dnc_args['output_size'] = data.nn_in_size  # output has no phase component
     dnc_args['word_len'] = data.nn_out_size
     print(dnc_args)
-    lr = 5e-5 if args.lr is None else args.lr
     # input_size = self.output_size + word_len * num_read_heads
     Dnc = dnc.VanillaLSTM(batch_size=1, num_layers=2, input_size=data.nn_in_size,
                           output_size=data.nn_out_size, hidden_size=250, num_reads=2)
     previous_out, (ho1, hc1), (ho2, hc2) = Dnc.init_state()
     if args.opt == 'adam':
         optimizer = optim.Adam([{'params': Dnc.parameters()}, {'params': ho1},
-                                {'params': hc1}, {'params': hc2}], lr=lr)
+                                {'params': hc1}, {'params': hc2}], lr=args.lr)
     else:
         optimizer = optim.SGD([{'params': Dnc.parameters()}, {'params': ho1},
-                               {'params': hc1}, {'params': hc2}], lr=lr)
+                               {'params': hc1}, {'params': hc2}], lr=args.lr)
 
     dnc_state = (previous_out, (ho1, hc1), (ho2, hc2))
     return data, Dnc, optimizer, dnc_state
@@ -280,7 +246,7 @@ def train_plan(args, data, DNC, lstm_state, optimizer):
             optimizer.step()
             sl.writer.add_scalar('losses.end', floss.data[0], sl.global_step)
 
-        n_success += 1 if n_correct / n_total > PASSING else 0
+        n_success += 1 if n_correct / n_total > args.passing else 0
         cum_total.append(n_total)
         cum_correct.append(n_correct)
         sl.add_scalar('recall.pct_correct', n_correct / n_total, sl.global_step)
@@ -317,12 +283,12 @@ def train_manager(args, train_fn):
                 save(DNC, optimizer, lstm_state, start, args, id_str)
 
             print('finished training epoch {}, score:{}'.format(train_epoch, score))
-            if score > PASSING:
+            if score > args.passing:
                 print('model_successful: {}, {} '.format(score, train_epoch))
                 passing = True
                 break
 
-        if passing == False:
+        if args.passing == False:
             print("Training has failed for problem of size {}, after {} epochs of {} phases".format(
                 test_size, args.max_ents, args.n_phases
             ))
