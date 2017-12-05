@@ -11,6 +11,7 @@ parser.add_argument('--lr', type=float, default=1e-5) #1e-5 in paper.
 parser.add_argument('--checkpoint_every', type=int, default=1000, help='')
 parser.add_argument('--log', nargs='?', type=int, default=0, help='summaries in tb')
 parser.add_argument('--notes', nargs='?', type=str, default='', help='any notes')
+parser.add_argument('--show_details', nargs='?', type=int, default=1, help='any notes')
 
 ########### Algorithm and Optimizer ##############
 parser.add_argument('--opt', type=str, default='adam')

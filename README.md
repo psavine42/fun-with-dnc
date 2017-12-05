@@ -1,6 +1,8 @@
 # Fun-With-Dnc (Differentiable Neural Computing)
 
-Pytorch implementation of deepmind paper [Hybrid computing using a neural network with dynamic external memory]: https://pdfs.semanticscholar.org/7635/78fa9003f6c0f735bc3250fc2116f6100463.pdf. The code is based on the tensorflow implementation [here]: https://github.com/deepmind/dnc. 
+Pytorch implementation of deepmind paper [Hybrid computing using a neural network with dynamic external memory]: https://pdfs.semanticscholar.org/7635/78fa9003f6c0f735bc3250fc2116f6100463.pdf. The code is based on the tensorflow implementation [here]: https://github.com/deepmind/dnc.
+
+Todo finish retraining, and better writeup. 
 
 ## Problems and Expirements
 There are a few tasks setup. One is the  "Air Cargo Prolbem" from Arificial Intelligence (Russell & Norvig). The origional code for the problem is based on the [Udacity Implementation]: https://github.com/udacity/AIND-Planning , and the full description is in the problem repo. 
@@ -32,6 +34,31 @@ The code implements a training schedule as in the paper. Start small with the mi
 
 
  We humans would think about the problem in terms of actions and type, so I thought the first thing the DNC would start getting correct would be the (Action, typeofthing1, typeofthing2, typeofthing3) 'tuple', since those must be correct in order to reliably get the instance correct. This was indeed the case as can be seen on the 'accuracies' plots during training. By the scemantics of the problem, the last 'type' is always Airplane, so that goes to 100% accuracy immediately. The next chunk of 1/3td of the training bumps up the types to 0.9-1.0 range. Only then does the loss for the entities themselves start dropping consistently. Even then, the ent1 and ent3 were coupled, which in the logic of the problem...
+
+To show details at each step of what was predicted vs best moves, specify the --detail flag. You will get something like this:
+
+        trial 978, step 19514 trial accy: 6/7, 0.86, pass total 296/978, running avg 0.7463, loss 0.0774  
+        best    Load    ['C1', 'P1', 'A1'], Fly ['P1', 'A1', 'A0']
+        chosen: Load    ['C1', 'P1', 'A1'], guided True,    prob 0.25, T? True  ---loss 0.2553
+        best    Fly     ['P1', 'A1', 'A0'], Unload ['C1', 'P1', 'A0']
+        chosen: Fly     ['P1', 'A1', 'A0'], guided True,    prob 0.33, T? True  ---loss 0.0784
+        best    Unload  ['C1', 'P1', 'A0'], Fly ['P0', 'A0', 'A1']
+        chosen: Unload  ['C1', 'P1', 'A0'], guided True,    prob 0.33, T? True  ---loss 0.0830
+        best    Fly     ['P0', 'A0', 'A1'], Load ['C0', 'P0', 'A1']
+        chosen: Fly     ['C0', 'P0', 'A1'], guided True,    prob 0.25, T? False ---loss 0.3716
+        best    Load    ['C0', 'P0', 'A1'], Fly ['P0', 'A1', 'A0']
+        chosen: Load    ['C0', 'P0', 'A1'], guided True,    prob 0.25, T? True  ---loss 0.1288
+        best    Fly     ['P0', 'A1', 'A0'], Unload ['C0', 'P0', 'A0']
+        chosen: Fly     ['P0', 'A1', 'A0'], guided False,   prob 0.25, T? True  ---loss 1.1554
+        best    Fly     ['P0', 'A1', 'A0'], Unload ['C0', 'P0', 'A0']
+        chosen: Unload  ['C0', 'P1', 'A0'], guided True,    prob 0.33, T? False ---loss 0.9901
+        best    Unload  ['C0', 'P0', 'A0']
+        chosen: Unload  ['C0', 'P0', 'A0'], guided False,   prob 0.33, T? True  ---loss 0.8087
+        best    Fly     ['P0', 'A1', 'A0'], Unload ['C0', 'P0', 'A0']
+        chosen: Unload  ['C0', 'P0', 'A0'], guided True,    prob 0.33, T? True  ---loss 0.7677
+
+The best actions are what was deterimined by the problem heurstics (not always optimal to save time). The chosen action is what the DNC ended up chosing. 'Guided' refers to Beta from the paper. 'Prob' is the chance of chosing that action (out of all legal actions), and the loss is there as well.
+
 
 ### Question Answering
 Another task that would be interesting I figured would be to give the DNC a problem (initial state, and goal), then make some moves, and ask where a certain Cargo is (which airport is it in? is it in a plane? which plane?). This did not work too well. See the run.py train_qa function. 
