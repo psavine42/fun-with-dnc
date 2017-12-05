@@ -2,7 +2,7 @@
 
 Pytorch implementation of deepmind paper [Hybrid computing using a neural network with dynamic external memory]: https://pdfs.semanticscholar.org/7635/78fa9003f6c0f735bc3250fc2116f6100463.pdf. The code is based on the tensorflow implementation [here]: https://github.com/deepmind/dnc. 
 
-#Problems and Expirements
+##Problems and Expirements
 There are a few tasks setup. One is the  "Air Cargo Prolbem" from Arificial Intelligence (Russell & Norvig). The origional code for the problem is based on the [Udacity Implementation]: https://github.com/udacity/AIND-Planning , and the full description is in the problem repo. 
 
 The Air Cargo problem can be seen as structured prediction, (every prediction step can be seen as changing the state of the problem). The algorithms used to solve it in the book included graphplan, and Astar search of the state space, putting it in the same family of problems as the Blocks Problem (SHRDLU) solved in the origional paper. 
@@ -57,8 +57,8 @@ Training at each 'level' took 20K steps. This is way more than reported in the p
 There was some expirementation 
 
 ##Loading Previous Run
+        
         python run.py --act plan --iters 1000 --n_phases 20 --load the_saved_name_or_path --save the_new
-
 
 ##Flags
 

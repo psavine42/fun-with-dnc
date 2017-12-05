@@ -56,8 +56,8 @@ def setupLSTM(args):
         optimizer = optim.SGD([{'params': Dnc.parameters()}, {'params': ho1},
                                {'params': hc1}, {'params': hc2}], lr=args.lr)
 
-    dnc_state = (previous_out, (ho1, hc1), (ho2, hc2))
-    return data, Dnc, optimizer, dnc_state
+    lstm_state = (previous_out, (ho1, hc1), (ho2, hc2))
+    return data, Dnc, optimizer, lstm_state
 
 
 def setupDNC(args):
