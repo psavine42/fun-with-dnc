@@ -8,7 +8,7 @@ There are a few tasks setup. One is the  "Air Cargo Prolbem" from Arificial Inte
 The Air Cargo problem can be seen as structured prediction, (every prediction step can be seen as changing the state of the problem). The algorithms used to solve it in the book included graphplan, and Astar search of the state space, putting it in the same family of problems as the Blocks Problem (SHRDLU) solved in the origional paper. 
 
 ## Installation
-Requires pytorch
+Requires pytorch (no cuda)
 
         conda install pytorch torchvision cuda80 -c soumith
 
@@ -31,7 +31,7 @@ The code implements a training schedule as in the paper. Start small with the mi
         python run.py --act plan --iters 1000  --ret_graph 0 --opt_at problem --save opt_problem_plan --n_phases 20
 
 
- We humans would think about the problem in terms of actions and type, so I thought the first thing the DNC would start getting correct would be the (Action, typeofthing1, typeofthing2, typeofthing3) 'tuple', since those must be correct in order to reliably get the instance correct. This was indeed the case as can be seen on the 'accuracies' plots during training. By the scemantics of the problem, the last 'type' is always Airplane, so that goes to 100% accuracy immediately. The next chunk of 1/3td of the training bumps up the types to 0.9-1.0 range. Only then does the loss for the entities themselves start dropping consistently. 
+ We humans would think about the problem in terms of actions and type, so I thought the first thing the DNC would start getting correct would be the (Action, typeofthing1, typeofthing2, typeofthing3) 'tuple', since those must be correct in order to reliably get the instance correct. This was indeed the case as can be seen on the 'accuracies' plots during training. By the scemantics of the problem, the last 'type' is always Airplane, so that goes to 100% accuracy immediately. The next chunk of 1/3td of the training bumps up the types to 0.9-1.0 range. Only then does the loss for the entities themselves start dropping consistently. Even then, the ent1 and ent3 were coupled, which in the logic of the problem...
 
 ### Question Answering
 Another task that would be interesting I figured would be to give the DNC a problem (initial state, and goal), then make some moves, and ask where a certain Cargo is (which airport is it in? is it in a plane? which plane?). This did not work too well. See the run.py train_qa function. 
@@ -48,7 +48,7 @@ The DNC was tested against vanilla Lstms. The Lstm appears to get stuck on air c
         python run.py --act plan --algo lstm --iters 1000 --n_phases 20 
 
 ### Misc
-Training at each 'level' took 20K steps. This is way more than reported in the paper. On my crappy home CPU, this meant about a day, aka forever.
+Training at each 'level' took 20K steps. This is way more than reported in the paper. On my crappy home CPU, this meant about a day, aka forever. Since I also lost my computer, causing me to need to retrain everything, I only got through the first level of training before having to submit (2 airports, 2 cargos, 2 planes). 
 
 
 ## Differences from Original
