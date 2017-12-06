@@ -9,13 +9,15 @@ parser.add_argument('--iters', nargs='?', type=int, default=21, help='number of 
 parser.add_argument('--env', type=str, default='', help='')
 parser.add_argument('--lr', type=float, default=1e-5) #1e-5 in paper.
 parser.add_argument('--checkpoint_every', type=int, default=1000, help='')
-parser.add_argument('--log', nargs='?', type=int, default=0, help='summaries in tb')
-parser.add_argument('--notes', nargs='?', type=str, default='', help='any notes')
-parser.add_argument('--show_details', nargs='?', type=int, default=1, help='any notes')
+parser.add_argument('--log', type=int, default=0, help='summaries in tb')
+parser.add_argument('--notes', type=str, default='', help='any notes')
+parser.add_argument('--show_details',  type=int, default=1, help='any notes')
 
 ########### Algorithm and Optimizer ##############
 parser.add_argument('--opt', type=str, default='adam')
 parser.add_argument('--algo', type=str, default='dnc')
+parser.add_argument('--cuda',  type=int, default=0, help='any notes')
+
 
 ########### CONTROL FLOW ##############
 parser.add_argument('--feed_last', type=int, default=1, help='')
@@ -29,21 +31,22 @@ parser.add_argument('--n_phases', type=int, default=15)
 parser.add_argument('--n_cargo', type=int, default=2)
 parser.add_argument('--n_plane', type=int, default=2)
 parser.add_argument('--n_airport', type=int, default=2)
-parser.add_argument('--typed', nargs='?', type=int, default=1, help='summaries in tb')
+parser.add_argument('--typed', type=int, default=1, help='summaries in tb')
 
 ########### PROBLEM CONTROL ##############
 parser.add_argument('--passing', type=float, default=0.9, help='')
 parser.add_argument('--num_tests', type=int, default=2, help='')
 parser.add_argument('--num_repeats', type=int, default=2, help='')
-parser.add_argument('--max_ents', nargs='?', type=int, default=6, help='summaries in tb')
-parser.add_argument('--beta', nargs='?', type=float, default=0.8, help='mixture param from paper')
+parser.add_argument('--max_ents', type=int, default=6, help='summaries in tb')
+parser.add_argument('--beta', type=float, default=0.8, help='mixture param from paper')
 
 args = parser.parse_args()
 
 args.repakge_each_step = True if args.rpkg_step == 1 else False
 args.ret_graph = True if args.ret_graph == 1 else False
-
+args.cuda = True if args.cuda == 1 else False
 args.prefix = '/output/' if args.env == 'floyd' else './'
+
 if not os.path.exists(args.prefix + 'models'):
     os.mkdir(args.prefix + 'models')
 
@@ -57,6 +60,7 @@ if args.save != '':
     arg_file = open(args.base_dir + 'params.txt', 'w')
     arg_file.write(str(args))
     arg_file.close()
+
 
 writer = None
 if args.log > 0:

@@ -48,11 +48,11 @@ class VanillaLSTM(nn.Module):
         return final_out, (mock_access, hidden1_out, hidden2_out)
 
     def init_state(self):
-        return [Variable(torch.zeros(self.batch_size, self.num_reads * self.out_size), requires_grad=True),
-                [Variable(torch.randn(self.num_layers, self.batch_size, self.hidden_size), requires_grad=True),
-                 Variable(torch.randn(self.num_layers, self.batch_size, self.hidden_size), requires_grad=True)],
-                [Variable(torch.randn(1, self.batch_size, self.out_size), requires_grad=True),
-                 Variable(torch.randn(1, self.batch_size, self.out_size), requires_grad=True)]]
+        return [_variable(torch.zeros(self.batch_size, self.num_reads * self.out_size), requires_grad=True),
+                [_variable(torch.randn(self.num_layers, self.batch_size, self.hidden_size), requires_grad=True),
+                 _variable(torch.randn(self.num_layers, self.batch_size, self.hidden_size), requires_grad=True)],
+                [_variable(torch.randn(1, self.batch_size, self.out_size), requires_grad=True),
+                 _variable(torch.randn(1, self.batch_size, self.out_size), requires_grad=True)]]
 
 
 
@@ -203,7 +203,7 @@ class Linkage(nn.Module):
                     #[batch_size, self._num_writes, self._memory_size],
                     #dtype=link.dtype))
         zeros = torch.LongTensor(list(range(self._memory_size)))
-        zero_idxs = Variable(zeros.view(1, self._num_writes, -1, 1))
+        zero_idxs = _variable(zeros.view(1, self._num_writes, -1, 1))
         return link.scatter_(-1, zero_idxs, 0)
 
 
@@ -336,7 +336,7 @@ class DNCMemory(nn.Module):
         _, perms = indices.sort(-1)
 
         sorted_usage = 1 - sorted_nonusage
-        ones_ = Variable(torch.ones(usage.size(0), 1))
+        ones_ = _variable(torch.ones(usage.size(0), 1))
         x_base = torch.cat([ones_, sorted_usage], -1)
 
         prod_sorted_usage = x_base.cumprod(-1)
@@ -427,23 +427,23 @@ class DNCMemory(nn.Module):
     def directional_read_weights(self, link, prev_read_weights):
         """Calculates the forward or the backward read weights.
 
-                For each read head (at a given address), there are `num_writes` link graphs
-                to follow. Thus this function computes a read address for each of the
-                `num_reads * num_writes` pairs of read and write heads.
+            For each read head (at a given address), there are `num_writes` link graphs
+            to follow. Thus this function computes a read address for each of the
+            `num_reads * num_writes` pairs of read and write heads.
 
-                Args:
-                link:
-                    tensor-shape `[batch_size, num_writes, memory_size, memory_size]`
-                    representing the link graphs L_t.
-                prev_read_weights:
-                    tensor-shape `[batch_size, num_reads, memory_size]`
-                    containing the previous read weights w_{t-1}^r.
-                forward: Boolean indicating whether to follow the "future" direction in
-                    the link graph (True) or the "past" direction (False).
+            Args:
+            link:
+                tensor-shape `[batch_size, num_writes, memory_size, memory_size]`
+                representing the link graphs L_t.
+            prev_read_weights:
+                tensor-shape `[batch_size, num_reads, memory_size]`
+                containing the previous read weights w_{t-1}^r.
+            forward: Boolean indicating whether to follow the "future" direction in
+                the link graph (True) or the "past" direction (False).
 
-                Returns:
-                tensor of shape `[batch_size, num_reads, num_writes, memory_size]`
-                """
+            Returns:
+            tensor of shape `[batch_size, num_reads, num_writes, memory_size]`
+            """
         # We calculate the forward and backward directions for each pair of
         # read and write heads; hence we need to tile the read weights and do a
         # sort of "outer product" to get this.
@@ -758,19 +758,19 @@ class DNC(nn.Module):
             `access_state` is a tuple of the access module's state
             `controller_state` is a tuple of controller module's state
             """
-        return [Variable(torch.zeros(self.batch_size, self.num_reads, self.word_len), requires_grad=grad),
-                Variable(torch.zeros(self.batch_size, self.mem_size, self.word_len), requires_grad=grad), #memory
-                Variable(torch.zeros(self.batch_size, self.num_reads, self.mem_size), requires_grad=grad), #read_weights
-                Variable(torch.zeros(self.batch_size, self.num_writes, self.mem_size), requires_grad=grad), #write weights
-                Variable(torch.zeros(self.batch_size, self.num_writes, self.mem_size, self.mem_size), requires_grad=grad),  #linkage
-                Variable(torch.zeros(self.batch_size, self.num_writes, self.mem_size), requires_grad=grad), #linkage weight
-                Variable(torch.zeros(self.batch_size, self.mem_size), requires_grad=grad)] #usage
+        return [_variable(torch.zeros(self.batch_size, self.num_reads, self.word_len), requires_grad=grad),
+                _variable(torch.zeros(self.batch_size, self.mem_size, self.word_len), requires_grad=grad), #memory
+                _variable(torch.zeros(self.batch_size, self.num_reads, self.mem_size), requires_grad=grad), #read_weights
+                _variable(torch.zeros(self.batch_size, self.num_writes, self.mem_size), requires_grad=grad), #write weights
+                _variable(torch.zeros(self.batch_size, self.num_writes, self.mem_size, self.mem_size), requires_grad=grad),  #linkage
+                _variable(torch.zeros(self.batch_size, self.num_writes, self.mem_size), requires_grad=grad), #linkage weight
+                _variable(torch.zeros(self.batch_size, self.mem_size), requires_grad=grad)] #usage
                 #[Variable(torch.randn(self.num_layers, self.batch_size, self.hidden_size), requires_grad=grad),
                 #  Variable(torch.randn(self.num_layers, self.batch_size, self.hidden_size), requires_grad=grad)]]
 
     def init_rnn(self, grad=True):
-        return [Variable(torch.ones(self.num_layers, self.batch_size, self.hidden_size) *.5, requires_grad=False),
-                Variable(torch.ones(self.num_layers, self.batch_size, self.hidden_size) *.5, requires_grad=False)]
+        return [_variable(torch.ones(self.num_layers, self.batch_size, self.hidden_size) *.5, requires_grad=False),
+                _variable(torch.ones(self.num_layers, self.batch_size, self.hidden_size) *.5, requires_grad=False)]
 
     @property
     def memory(self):

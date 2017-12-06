@@ -3,8 +3,16 @@ import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
 import pickle, os, glob
+from arg import args 
 
 eps = 10e-6
+
+def _variable(xs):
+    if args.cuda is True:
+        return Variable(xs).cuda()
+    else:
+        return Variable(xs)
+
 
 def repackage(xs):
     """Wraps hidden states in new Variables, to detach them from their history."""
@@ -12,6 +20,7 @@ def repackage(xs):
         return Variable(xs.data)
     else:
         return tuple(repackage(v) for v in xs)
+
 
 def depackage(xs):
     """Wraps hidden states in new Variables, to detach them from their history."""
@@ -22,8 +31,8 @@ def depackage(xs):
     else:
         return tuple(depackage(v) for v in xs)
 
+
 def interface_part(num_reads, W):
-                    #read_keys
     partition = [num_reads* W, num_reads, W, 1, W, W, num_reads, 1, 1, num_reads * 3]
     ds = []
     cntr = 0
@@ -72,15 +81,16 @@ def clean_runs(dirs, lim=10):
 def dnc_checksum(state):
     return [state[i].data.sum() for i in range(6)]
 
+
 def save(model, optimizer, lstm_state, time_stmp, args, itr):
-    # out, mem, r_wghts, w_wghts, links, l_wghts, usage, (ho, hc) = state
     name =  str(time_stmp) + args.save + str(itr) + '.pkl'
-    torch.save(model.state_dict(), args.prefix + 'models/dnc_model_' + name)
-    torch.save(model, args.prefix + 'models/dnc_model_full_' + name)
-    torch.save(lstm_state, args.prefix + 'models/lstm_state_' + name)
-    torch.save(optimizer.state_dict(), args.prefix + 'models/optimizer_' + name)
-    torch.save(optimizer, args.prefix + 'models/optimizer_full_' + name)
-    print("Saving ... file {}".format( str(time_stmp) + args.save + str(itr) ))
+
+    torch.save(model.state_dict(), args.base_dir + 'dnc_model_' + name)
+    torch.save(model, args.base_dir +  'dnc_model_full_' + name)
+    torch.save(lstm_state, args.base_dir + 'lstm_state_' + name)
+    torch.save(optimizer.state_dict(), args.base_dir + 'optimizer_' + name)
+    torch.save(optimizer, args.base_dir + 'optimizer_full_' + name)
+    print("Saving ... file {} , itr {}".format(args.base_dir, itr))
 
 
 def get_prediction(expanded_logits, idxs='all'):
@@ -92,15 +102,22 @@ def get_prediction(expanded_logits, idxs='all'):
         max_idxs.append(pidx.squeeze()[0])
     return tuple(max_idxs)
 
+
 def to_human_readable(input, mask):
     # phase = gen.PHASES[mask]
     # expr = data.ix_to_expr(inputs)
     pass
 
-def correct(pred, best_actions):
-    #action_own = [pred[0], (pred[1], pred[2]), (pred[3], pred[4]), (pred[5], pred[6])]
-    #correct = action_own in best_actions
-    pass
+
+def correct(pred, actions):
+    best = 0
+    chosen_action = None
+    for action in [flat(a) for a in actions]:
+        scores = [1 if pred[i] == action[i] else 0 for i in range(len(pred))]
+        if sum(scores) >= best:
+            best, chosen_action = sum(scores), scores
+    return chosen_action
+
 
 def human_readable_res(Data, all_actions, best_actions, chosen_action, pred, Guided, loss_data):
     base_prob = 1 / len(all_actions)
@@ -114,7 +131,6 @@ def human_readable_res(Data, all_actions, best_actions, chosen_action, pred, Gui
         if sum(scores) >= best:
             best, action_der = sum(scores), scores
 
-    # print(Data.one_hot_size)
     best_move_exprs = [Data.vec_to_expr(t) for t in best_actions]
     all_move_exprs = [Data.vec_to_expr(t) for t in all_actions]
     chos_move, crest = Data.vec_to_expr(action_own)

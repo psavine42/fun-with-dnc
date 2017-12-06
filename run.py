@@ -1,7 +1,7 @@
 import argparse
 import dnc_arity_list as dnc
 import numpy as np
-from utils import running_avg, flat, repackage, dnc_checksum, save
+from utils import running_avg, flat, repackage, dnc_checksum, save, _variable
 import utils as u
 import torch
 import torch.nn as nn
@@ -13,11 +13,10 @@ import logger as sl
 import os
 import losses as L
 import training as tfn
-random.seed()
 from collections import defaultdict
 from arg import args, start
 
-
+random.seed()
 batch_size = 1
 dnc_args = {'num_layers': 2,
             'num_read_heads': 2,
@@ -84,6 +83,9 @@ def setupDNC(args):
             optimizer.load_state_dict(dict_)
             optimizer.state = defaultdict(dict, optimizer.state)
 
+    if args.cuda is True:
+        optimizer = optimizer.cuda()
+        Dnc = Dnc.cuda()
     lstm_state = Dnc.init_rnn()
     return data, Dnc, optimizer, lstm_state
 
@@ -117,7 +119,7 @@ def train_qa2(args, data, DNC, optimizer):
 
         for phase_idx in phase_masks:
             if phase_idx == 0 or phase_idx == 1:
-                inputs = Variable(data.getitem_combined())
+                inputs = _variable(data.getitem_combined())
                 logits, dnc_state = DNC(inputs, dnc_state)
             else:
                 final_moves = data.get_actions(mode='one')
@@ -125,7 +127,7 @@ def train_qa2(args, data, DNC, optimizer):
                     break
                 data.send_action(final_moves[0])
                 mask = data.phase_oh[2].unsqueeze(0)
-                inputs2 = Variable(torch.cat([mask, data.vec_to_ix(final_moves[0])], 1))
+                inputs2 = _variable(torch.cat([mask, data.vec_to_ix(final_moves[0])], 1))
                 logits, dnc_state = DNC(inputs2, dnc_state)
 
                 for _ in range(args.num_tests):
@@ -133,7 +135,7 @@ def train_qa2(args, data, DNC, optimizer):
                     if args.zero_at == 'step':
                         optimizer.zero_grad()
                     masked_input, mask_chunk, ground_truth = data.masked_input()
-                    logits, dnc_state = DNC(Variable(masked_input), dnc_state)
+                    logits, dnc_state = DNC(_variable(masked_input), dnc_state)
                     expanded_logits = data.ix_input_to_ixs(logits)
 
                     #losses
@@ -185,12 +187,12 @@ def train_plan(args, data, DNC, lstm_state, optimizer):
         for phase_idx in phase_masks:
 
             if phase_idx == 0 or phase_idx == 1:
-                inputs = Variable(data.getitem_combined())
+                inputs = _variable(data.getitem_combined())
                 logits, dnc_state, lstm_state = DNC(inputs, lstm_state, dnc_state)
                 _, prev_action = data.strip_ix_mask(logits)
 
             elif phase_idx == 2:
-                mask = Variable(data.getmask())
+                mask = _variable(data.getmask())
                 # print(prev_action)
                 inputs = torch.cat([mask, prev_action], 1)
                 logits, dnc_state, lstm_state = DNC(inputs, lstm_state, dnc_state)
@@ -205,7 +207,7 @@ def train_plan(args, data, DNC, lstm_state, optimizer):
                 if args.zero_at == 'step':
                     optimizer.zero_grad()
 
-                mask = Variable(data.getmask())
+                mask = _variable(data.getmask())
                 final_inputs = torch.cat([mask, prev_action], 1)
                 logits, dnc_state, lstm_state = DNC(final_inputs, lstm_state, dnc_state)
                 exp_logits = data.ix_input_to_ixs(logits)

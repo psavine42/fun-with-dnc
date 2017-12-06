@@ -18,7 +18,6 @@ def to_log(tnsr):
         if type(clone) == Variable:
             clone = clone.data
         sizes = list(clone.size())
-
         if len(sizes) > 1 and not all((s == 1 for s in sizes)):
             return clone.cpu().squeeze().numpy()
         else:
@@ -63,7 +62,7 @@ def log_acc(accs, total):
 
 def add_scalar(*args, **kwdargs):
     if writer:
-        writer.add_scalar(*args, **kwdargs )
+        writer.add_scalar(*args, **kwdargs)
 
 
 def log_loss_qa(ent, inst, loss):

@@ -49,7 +49,7 @@ def combined_ent_loss(logits, action, criterion, log=None):
         losses.append(criterion(logits[idx], tgt))
 
     # action_own = [pred[0], (pred[1], pred[2]), (pred[3], pred[4]), (pred[5], pred[6])]
-    lfs = [losses[0]]
+    lfs = [[losses[0]]]
     n = 2
     for l in(losses[i:i+n] for i in range(1, len(losses), n)):
         lfs.append(torch.stack(losses, 0).sum())
