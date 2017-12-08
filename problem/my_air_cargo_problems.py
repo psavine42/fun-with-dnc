@@ -13,6 +13,7 @@ from .my_planning_graph import PlanningGraph
 from functools import lru_cache
 from random import shuffle
 
+
 class AirCargoProblem(Problem):
     def __init__(self, cargos, planes, airports, initial: FluentState, goal: list):
         """
@@ -141,7 +142,6 @@ class AirCargoProblem(Problem):
                 return action
         return []
 
-
     def actions(self, state: str) -> list:
         possible_actions = []
         kb = PropKB()
@@ -159,7 +159,6 @@ class AirCargoProblem(Problem):
             if is_possible:
                 possible_actions.append(action)
         return possible_actions
-
 
     def result(self, state: str, action: Action):
         """ Return the state that results from executing the given

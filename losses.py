@@ -1,6 +1,6 @@
 import torch
 import logger as sl
-from utils import flat, repackage, _variable
+from utils import flat, repackage, depackage, _variable, closest_action
 
 
 def action_loss(logits, action, criterion, log=None):
@@ -23,7 +23,7 @@ def action_loss(logits, action, criterion, log=None):
 
 def get_top_prediction(expanded_logits, targets, idxs=None):
     max_idxs = []
-    idxs = range(len(expanded_logits)) if idxs == None else idxs
+    idxs = range(len(expanded_logits)) if idxs is None else idxs
     for idx in idxs:
         _, pidx = expanded_logits[idx].data.topk(1)
         max_idxs.append(pidx.squeeze()[0])
@@ -56,7 +56,7 @@ def combined_ent_loss(logits, action, criterion, log=None):
     return loss
 
 
-def naive_loss(logits, targets, criterion, log=None, loss_fn=action_loss):
+def naive_loss(logits, targets, criterion, log=None):
     """
         Calculate best choice from among targets, and return loss
 
@@ -65,9 +65,11 @@ def naive_loss(logits, targets, criterion, log=None, loss_fn=action_loss):
         :param criterion:
         :return: loss
         """
+    # copy_logits = depackage(logits)
+    # final_action = closest_action(copy_logits, targets)
     loss_idx, _ = min(enumerate([action_loss(repackage(logits), a, criterion) for a in targets]))
     final_action = targets[loss_idx]
-    return final_action, loss_fn(logits, final_action, criterion, log=log)
+    return final_action, action_loss(logits, final_action, criterion, log=log)
 
 
 

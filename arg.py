@@ -1,4 +1,4 @@
-import argparse, os, time
+import argparse, os, time, json
 
 parser = argparse.ArgumentParser(description='Hyperparams')
 ########### STANDARD ENV SPEC ##############
@@ -16,13 +16,13 @@ parser.add_argument('-d', '--show_details', type=int, default=20, help='any note
 
 ########### Algorithm and Optimizer ##############
 parser.add_argument('--opt', type=str, default='adam', help='optimizer to use. options are sgd and adam')
-parser.add_argument('--algo', type=str, default='dnc', help='')
+parser.add_argument('--algo', type=str, default='dnc', help='dnc or lstm. default is dnc')
 parser.add_argument('-c', '--cuda',  type=int, default=0, help='device to run - 1 if cuda, 0 if cpu')
-parser.add_argument('--clip', type=float, default=0, help='any notes')
+parser.add_argument('--clip', type=float, default=0, help='gradient clipping, if zero, no clip')
 
 ########### CONTROL FLOW ##############
 parser.add_argument('--feed_last', type=int, default=1, help='')
-parser.add_argument('--opt_at', type=str, default='problem', help='')
+parser.add_argument('--opt_at', type=str, default='step', help='')
 parser.add_argument('--zero_at', type=str, default='step', help='')
 parser.add_argument('--ret_graph', type=int, default=1, help='retain graph todo change to ')
 parser.add_argument('--rpkg_step', type=int, default=1, help='repackage input vars at each step')
@@ -61,9 +61,12 @@ if args.save != '':
     args.base_dir = '{}{}{}_{}/'.format(args.prefix, 'models/', start, args.save)
     os.mkdir(args.base_dir)
     os.mkdir(args.base_dir + 'checkpts/')
-    arg_file = open(args.base_dir + 'params.txt', 'w')
-    arg_file.write(str(args))
-    arg_file.close()
+    argparse_dict = vars(args)
+    with open(args.base_dir + 'params.txt', 'w') as outfile:
+        json.dump(argparse_dict, outfile)
+    # arg_file = open( 'w')
+    # arg_file.write(json.dump(arg_file))
+    # arg_file.close()
     print('Saving in folder {}'.format(args.base_dir))
 
 writer = None

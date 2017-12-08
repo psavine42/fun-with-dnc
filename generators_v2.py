@@ -230,18 +230,18 @@ class AirCargoData():
         self.search_param = 'h_ignore_preconditions'
         self.ents_to_ix, self.ix_to_ents = None, None
 
-        self.STATE = ''
+        self.STATE, self.INIT_STATE = '', ''
         self.current_index, self.cuda = 0, cuda
         self.current_problem, self.goals, self.state = None, None, None
 
         self.phase_oh = torch.eye(len(PHASES))
         self.blnk_vec = torch.zeros(len(EXPRESSIONS) * 2).float() #
         self.expr_o_h = torch.cat([torch.zeros([1, len(EXPRESSIONS)]), torch.eye(len(EXPRESSIONS))], 0).float()
-        # self.expr_o_h = self.expr_o_h.cuda() if self.cuda is True else self.expr_o_h
-
         self.ents_o_h = None
         self.masks = []
 
+        # new indices
+        self.goals_idx, self.cargo_in_idx = {}, {}
         self.cache, self.encodings = {}, {}
         self.make_new_problem()
         print(self.plan_len)
@@ -264,7 +264,6 @@ class AirCargoData():
             return "NA"
 
     def masked_input(self):
-
         state_expr = random.choice(self.pull_state())
         state_vec = self.expr_to_vec(state_expr)
         mask_idx = 2
@@ -286,55 +285,63 @@ class AirCargoData():
         self.ents_o_h = []
         for noop, ix_size in zip(noops, self.one_hot_size):
             ix_enc = torch.cat([noop, torch.eye(ix_size)], 0).float()
-            # if self.cuda is True:
-                # ix_enc = ix_enc.cuda()
             self.ents_o_h.append(ix_enc)
         self.blnk_vec = torch.cat([torch.zeros([1, len(EXPRESSIONS)]), torch.cat(noops, 1)], 1)
-        # if self.cuda is True:
-        # self.blnk_vec = self.blnk_vec.cuda()
 
     def print_solution(self, node):
         for action in node.solution():
             print("{}{}".format(action.name, action.args))
 
     def best_logic(self, action_exprs):
-        # index of cargo : airport
-        #
-        goals = {goal.args[0]: goal.args[1] for goal in self.goals}
-        best_actions = []
+        if self.goals_idx == {}:
+            return []
+        best_actions, at_goal = [], []
         for action in action_exprs:
-            op = action.op
-            if op == 'Fly':
-                plane = action.args[0]
+            op = action.name
+            if op == 'Unload':
+                cargo = action.args[0]
+                if cargo in self.goals_idx and self.goals_idx[cargo] == action.args[2]:
+                    at_goal.append(action)
+                    continue
+            elif op == 'Load':
+                cargo = action.args[0]
+                # load cargo if it is not in its home
+                if cargo in self.goals_idx:
+                    at_goal.append(action)
+                    continue
+            elif op == 'Fly':
+                plane, airpt, dest_n = action.args
+                cargos_in_plane = [cargo for cargo, _in in self.cargo_in_idx.items() if _in == plane]
                 # if there is a cargo in the plane
                 # and desitination is the cargo's goal
+                if cargos_in_plane != []:
+                    cargo = cargos_in_plane[0] # assumes one cargo
+                    if cargo in self.goals_idx and self.goals_idx[cargo] == dest_n:
+                        at_goal.append(action)
+                        continue
+                # if there are no cargos at the airport, fly to destination with GOAL cargo
+                cargos_in_airpt = [cargo for cargo, _in in self.cargo_in_idx.items() if _in == airpt]
+                if cargos_in_airpt == []:
+                    cargos_in_dest = [cargo for cargo, _in in self.cargo_in_idx.items() if _in == dest_n]
+                    if cargos_in_dest != []:
+                        best_actions.append(action)
 
-                # if there are no cargos at the airport
-                #
-            elif op == 'Unload':
-                cargo = action.args[0]
-                if goals[cargo] == action.args[2]:
-                    best_actions.append(action)
-            elif op == 'Load':
-                # load cargo if it is not in its home
-                cargo = action.args[0]
-                if goals[cargo] != action.args[2]:
-                    best_actions.append(action)
-        return best_actions
+        if not at_goal:
+            return best_actions
+        else:
+            return at_goal
 
-    def get_actions(self, mode='best'):
+    def get_raw_actions(self, mode='best'):
         self.current_problem.initial = self.STATE
         if mode == 'all':
             actions_exprs = self.current_problem.actions(self.STATE)
         elif mode == 'one':
             actions_exprs = [self.current_problem.one_action(self.STATE)]
         elif mode == 'both':
-            pass
+            all_actions = self.current_problem.actions(self.STATE)
+            best_actions = self.best_logic(all_actions)
+            return best_actions, all_actions
         else:
-            #state_hash = hash(str(self.pull_state()))
-            #if state_hash in self.cache:
-                #actions_exprs = self.cache[state_hash]
-            #else:
             if self.search_param is not None:
                 prm = getattr(self.current_problem, self.search_param)
                 solution = self.search_fn(self.current_problem, prm)
@@ -342,9 +349,14 @@ class AirCargoData():
             else:
                 solution = self.search_fn(self.current_problem)
                 actions_exprs = solution.solution()[0:len(self.current_problem.planes)]
-             #  self.cache[state_hash] = actions_exprs
-        return [self.expr_to_vec(a) for a in actions_exprs]
+        return actions_exprs
 
+    def get_actions(self, mode='best'):
+        if mode == 'both':
+            best, all = self.get_raw_actions(mode=mode)
+            return [self.expr_to_vec(a) for a in best], [self.expr_to_vec(a) for a in all]
+        else:
+            return [self.expr_to_vec(a) for a in self.get_raw_actions(mode=mode)]
 
     def encode_action(self, action_obj):
         return torch.from_numpy(self.current_problem.encode_action(action_obj)).long()
@@ -355,7 +367,6 @@ class AirCargoData():
         """
         self.current_problem.initial = self.STATE
         sym, args = self.vec_to_expr(action_vec)
-
         actions_ = self.current_problem.actions(self.STATE)
         final_act = []
         for a in actions_:
@@ -363,6 +374,17 @@ class AirCargoData():
                 final_act = a
                 break
         assert final_act != []
+        if final_act.name == 'Load':
+            cargo, plane, _ = final_act.args
+            self.cargo_in_idx[cargo] = plane
+        elif final_act.name == 'Unload':
+            cargo, _, airpt = final_act.args
+            if cargo in self.goals_idx and self.goals_idx[cargo] == airpt:
+                # if this is the goal state, remove from running index
+                del self.goals_idx[cargo]
+                del self.cargo_in_idx[cargo]
+            else: # else add to new airport
+                self.cargo_in_idx[cargo] = airpt
         self.STATE = self.current_problem.result(self.STATE, final_act)
         return self.STATE, final_act
 
@@ -467,7 +489,6 @@ class AirCargoData():
         vec = self.ix_to_vec(ix_input_vec)
         return self.vec_to_expr(vec)
 
-
     def expr_to_vec(self, expr_obj):
         """
         :param expr_obj: Action Expr object Fly(P0, A1, A2)
@@ -528,33 +549,35 @@ class AirCargoData():
         txt += 'expr {}'
         return txt.format(args)
 
-
     def make_new_problem(self):
         """
             Set up new problem object
         :return:
         """
-        problem, (e_ix, ix_e), (s, g) = mac.arbitrary_ACP2(self.n_airport, self.n_cargo,
-                                                           self.n_plane, encoding=self.encoding)
+        problem, (e_ix, ix_e), (s, g) = \
+            mac.arbitrary_ACP2(self.n_airport, self.n_cargo, self.n_plane, encoding=self.encoding)
         self.current_problem = problem
+
         self.STATE = problem.initial
+        self.INIT_STATE = problem.initial
         self.generate_encodings()
         self.state, self.goals = s, g
-        # self.pg = mac.PlanningGraph(self, problem.initial)
+        self.goals_idx = {goal.args[0]: goal.args[1] for goal in self.goals}
+        self.cargo_in_idx = {st.args[0]: st.args[1] for st in s if st.args[0].op.startswith('C')}
 
-        if self.solve is True:
-            prm = getattr(problem, self.search_param)
-            solution_node = len(self.search_fn(problem, prm).solution())
-        else:
-            solution_node = self.solve
-
+        # if self.solve is True:
+        # todo something about this maybe deepcopy self and fastsolve?
+            #prm = getattr(problem, self.search_param)
+            #solution_node = len(self.search_fn(problem, prm).solution())
+        # else:
+        # solution_node = self.solve
         state = torch.zeros(len(self.state))
         goal = torch.ones(len(self.goals))
         plan = torch.ones(self.plan_len) * 2
-        resp = torch.ones(solution_node + 3) * 3
+        resp = torch.ones(self.n_cargo * 4) * 3
 
         self.masks = torch.cat([state, goal, plan, resp], 0).long()
-        self.ents_to_ix,  self.ix_to_ents = e_ix, ix_e
+        self.ents_to_ix, self.ix_to_ents = e_ix, ix_e
         self.current_index = 0
         return self.masks
 

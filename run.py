@@ -175,6 +175,7 @@ def train_plan(args, data, DNC, lstm_state, optimizer):
         """
     criterion = nn.CrossEntropyLoss().cuda() if args.cuda is True else nn.CrossEntropyLoss()
     cum_correct, cum_total, prob_times, n_success = [], [], [], 0
+    penalty = 1.05
 
     for trial in range(args.iters):
         start_prob = time.time()
@@ -199,9 +200,8 @@ def train_plan(args, data, DNC, lstm_state, optimizer):
 
             else:
                 # sample from best moves
-                targets_star = data.get_actions(mode='best')
-                all_actions = data.get_actions(mode='all')
-                if not targets_star: # == []:
+                actions_star, all_actions = data.get_actions(mode='both')
+                if not actions_star:
                     break
                 if args.zero_at == 'step':
                     optimizer.zero_grad()
@@ -215,8 +215,9 @@ def train_plan(args, data, DNC, lstm_state, optimizer):
                 exp_logits = data.ix_input_to_ixs(logits)
 
                 guided = random.random() < args.beta
+                # thing 1
                 if guided: # guided loss
-                    final_action, lstep = L.naive_loss(exp_logits, targets_star, criterion, log=True)
+                    final_action, lstep = L.naive_loss(exp_logits, actions_star, criterion, log=True)
                 else: # pick own move
                     final_action, lstep = L.naive_loss(exp_logits, all_actions, criterion, log=True)
 
@@ -232,11 +233,11 @@ def train_plan(args, data, DNC, lstm_state, optimizer):
                 data.send_action(final_action)
                 action_own = u.get_prediction(exp_logits)
                 if (trial + 1) % args.show_details == 0:
-                    action_accs = u.human_readable_res(data, all_actions, targets_star, # final_action,
+                    action_accs = u.human_readable_res(data, all_actions, actions_star,
                                                        action_own, guided, lstep.data[0])
                     stats.append(action_accs)
                 n_total, _ = tick(n_total, n_correct, action_own, flat(final_action))
-                n_correct += 1 if action_own in [tuple(flat(t)) for t in targets_star] else 0
+                n_correct += 1 if action_own in [tuple(flat(t)) for t in actions_star] else 0
                 prev_action = data.vec_to_ix(final_action)
 
         if stats:
