@@ -8,10 +8,10 @@ import torch.nn as nn
 import generators_v2 as gen
 import torch.optim as optim
 import time, random
-from torch.autograd import Variable
 import logger as sl
 import os
 import losses as L
+import timeit
 import training as tfn
 from collections import defaultdict
 from arg import args, start
@@ -23,7 +23,7 @@ dnc_args = {'num_layers': 2,
             'hidden_size': 250,
             'num_write_heads': 1,
             'memory_size': 100,
-            'batch_size': batch_size }
+            'batch_size': batch_size}
 
 
 def generate_data_spec(args, num_ents=2, solve=True):
@@ -35,7 +35,7 @@ def generate_data_spec(args, num_ents=2, solve=True):
         ix_size = [ix_state, ix_state, ix_state]
         encoding = 1
     return {'num_plane': num_ents, 'num_cargo': num_ents, 'num_airport': num_ents,
-            'one_hot_size': ix_size, 'plan_phase': num_ents * 3,
+            'one_hot_size': ix_size, 'plan_phase': num_ents * 3, 'cuda': args.cuda,
             'batch_size': 1, 'encoding': encoding, 'solve': solve, 'mapping': None}
 
 
@@ -60,6 +60,11 @@ def setupLSTM(args):
 
 
 def setupDNC(args):
+    """
+        Loader for files or setup new DNC and optimizer
+    :param args:
+    :return:
+    """
     if args.algo == 'lstm':
         return setupLSTM(args)
     data = gen.AirCargoData(**generate_data_spec(args))
@@ -70,21 +75,16 @@ def setupDNC(args):
         Dnc = dnc.DNC(**dnc_args)
         optimizer = optim.Adam(Dnc.parameters(), lr=args.lr)
     else:
-        model_path = args.prefix + '/models/dnc_model_' + args.load
+        model_path, optim_path = u.get_chkpt(args.load)
         print('loading', model_path)
         Dnc = dnc.DNC(**dnc_args)
         Dnc.load_state_dict(torch.load(model_path))
 
-        optim_path = args.prefix + '/models/dnc_model_' + args.load
-        optimizer = optim.Adam([Dnc.parameters()], lr=args.lr)
+        optimizer = optim.Adam(Dnc.parameters(), lr=args.lr)
         if os.path.exists(optim_path):
-            # optimizer = optim.Adam
-            dict_ = {'params': torch.load(optim_path)}
-            optimizer.load_state_dict(dict_)
-            optimizer.state = defaultdict(dict, optimizer.state)
+            optimizer.load_state_dict(torch.load(optim_path))
 
     if args.cuda is True:
-        optimizer = optimizer.cuda()
         Dnc = Dnc.cuda()
     lstm_state = Dnc.init_rnn()
     return data, Dnc, optimizer, lstm_state
@@ -138,7 +138,7 @@ def train_qa2(args, data, DNC, optimizer):
                     logits, dnc_state = DNC(_variable(masked_input), dnc_state)
                     expanded_logits = data.ix_input_to_ixs(logits)
 
-                    #losses
+                    # losses
                     lstep = L.action_loss(expanded_logits, ground_truth, criterion, log=True)
                     if args.opt_at == 'problem':
                         loss += lstep
@@ -147,7 +147,7 @@ def train_qa2(args, data, DNC, optimizer):
                         optimizer.step()
                         loss = lstep
 
-                    #update counters
+                    # update counters
                     prediction = u.get_prediction(expanded_logits, [3, 4])
                     n_total, n_correct = tick(n_total, n_correct, mask_chunk, prediction)
 
@@ -173,7 +173,7 @@ def train_plan(args, data, DNC, lstm_state, optimizer):
         :param args:
         :return:
         """
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss().cuda() if args.cuda is True else nn.CrossEntropyLoss()
     cum_correct, cum_total, prob_times, n_success = [], [], [], 0
 
     for trial in range(args.iters):
@@ -193,7 +193,6 @@ def train_plan(args, data, DNC, lstm_state, optimizer):
 
             elif phase_idx == 2:
                 mask = _variable(data.getmask())
-                # print(prev_action)
                 inputs = torch.cat([mask, prev_action], 1)
                 logits, dnc_state, lstm_state = DNC(inputs, lstm_state, dnc_state)
                 _, prev_action = data.strip_ix_mask(logits)
@@ -202,13 +201,16 @@ def train_plan(args, data, DNC, lstm_state, optimizer):
                 # sample from best moves
                 targets_star = data.get_actions(mode='best')
                 all_actions = data.get_actions(mode='all')
-                if targets_star == []:
+                if not targets_star: # == []:
                     break
                 if args.zero_at == 'step':
                     optimizer.zero_grad()
 
-                mask = _variable(data.getmask())
-                final_inputs = torch.cat([mask, prev_action], 1)
+                mask = data.getmask()
+                prev_action = prev_action.cuda() if args.cuda is True else prev_action
+                pr = u.depackage(prev_action)
+
+                final_inputs = _variable(torch.cat([mask, pr], 1))
                 logits, dnc_state, lstm_state = DNC(final_inputs, lstm_state, dnc_state)
                 exp_logits = data.ix_input_to_ixs(logits)
 
@@ -222,29 +224,31 @@ def train_plan(args, data, DNC, lstm_state, optimizer):
                     loss += lstep
                 else:
                     lstep.backward(retain_graph=args.ret_graph)
+                    if args.clip:
+                        torch.nn.utils.clip_grad_norm(DNC.parameters(), args.clip)
                     optimizer.step()
                     loss = lstep
 
                 data.send_action(final_action)
                 action_own = u.get_prediction(exp_logits)
-                if (trial + 1) % 20 == 0:
-                    action_accs = u.human_readable_res(data, all_actions, targets_star,
-                                                       final_action, action_own, guided, lstep.data[0])
+                if (trial + 1) % args.show_details == 0:
+                    action_accs = u.human_readable_res(data, all_actions, targets_star, # final_action,
+                                                       action_own, guided, lstep.data[0])
                     stats.append(action_accs)
                 n_total, _ = tick(n_total, n_correct, action_own, flat(final_action))
                 n_correct += 1 if action_own in [tuple(flat(t)) for t in targets_star] else 0
-                # feed own outputs, or feed final action?
                 prev_action = data.vec_to_ix(final_action)
 
         if stats:
             arr = np.array(stats)
             correct = len([1 for i in list(arr.sum(axis=1)) if i == len(stats[0])]) / len(stats)
             sl.log_acc(list(arr.mean(axis=0)), correct)
-            # print(list(arr.mean(axis=0)), )
 
         if args.opt_at == 'problem':
             floss = loss / n_total
             floss.backward(retain_graph=args.ret_graph)
+            if args.clip:
+                torch.nn.utils.clip_grad_norm(DNC.parameters(), args.clip)
             optimizer.step()
             sl.writer.add_scalar('losses.end', floss.data[0], sl.global_step)
 
@@ -264,57 +268,48 @@ def train_plan(args, data, DNC, lstm_state, optimizer):
 
 def train_manager(args, train_fn):
     datspec = generate_data_spec(args)
-    print('\n', datspec)
+    print('\nInitial Spec', datspec)
 
     _, DNC, optimizer, lstm_state = setupDNC(args)
-    start_ents = 2
-    print(DNC)
+    start_ents, score, global_epoch = args.n_init_start, 0, args.start_epoch
+    print('\nDnc structure', DNC)
 
     for problem_size in range(args.max_ents):
         test_size = problem_size + start_ents
         passing = False
         data_spec = generate_data_spec(args, num_ents=test_size, solve=test_size * 3)
-        data_loader = gen.AirCargoData(**data_spec)
+        data = gen.AirCargoData(**data_spec)
 
         print("beginning new training Size: {}".format(test_size))
         for train_epoch in range(args.n_phases):
-            print("\n \n epoch {}".format(train_epoch))
-            DNC, optimizer, lstm_state, score = train_fn(args, data_loader, DNC, lstm_state, optimizer)
-            if (train_epoch + 1) % args.checkpoint_every and args.save != '':
-                id_str = '_s{}_ep_{}_gl_{}'.format(test_size, train_epoch, sl.global_step)
-                save(DNC, optimizer, lstm_state, start, args, id_str)
+            ep_start = time.time()
+            global_epoch += 1
+            print("\nStarting Epoch {}".format(train_epoch))
 
-            print('finished training epoch {}, score:{}'.format(train_epoch, score))
+            DNC, optimizer, lstm_state, score = train_fn(args, data, DNC, lstm_state, optimizer)
+            if (train_epoch + 1) % args.checkpoint_every and args.save != '':
+                save(DNC, optimizer, lstm_state, args, global_epoch)
+
+            ep_end = time.time()
+            ttl_s = ep_end - ep_start
+            print('finished epoch: {}, score: {}, ttl-time: {:0.4f}, time/prob: {:0.4f}'.format(
+                train_epoch, score, ttl_s, ttl_s / args.iters
+            ))
             if score > args.passing:
                 print('model_successful: {}, {} '.format(score, train_epoch))
+                print('----------------------WOO!!--------------------------')
                 passing = True
                 break
 
-        if args.passing == False:
-            print("Training has failed for problem of size {}, after {} epochs of {} phases".format(
+        if passing is False:
+            print("Training has failed for problem of size: {}, after {} epochs of {} phases".format(
                 test_size, args.max_ents, args.n_phases
             ))
             print("final score was {}".format(score))
             break
 
 
-# python run.py --act qa --iters 10000 --opt adam --save _adam_typed_qa_long_
-# python run.py --act dag --max_ents 6 --opt adam --save _new_hidden --ret_graph False --opt_at step
-if __name__=="__main__":
-
-    # args.repakge_each_step = True if args.rpkg_step == 1 else False
-    # args.ret_graph = True if args.ret_graph == 1 else False
-    # sl.log_step += args.log
-
-    # args.prefix = '/output/' if args.env == 'floyd' else './'
-    # if not os.path.exists(args.prefix + 'models'):
-    #     os.mkdir(args.prefix + 'models')
-
-    # if args.save != '':
-    #     f = open(args.prefix + 'models/params_' + str(start) + str(args.save) + '.txt', 'w')
-    #     f.write(str(args))
-    #     f.close()
-
+if __name__== "__main__":
     print(args)
     if args.act == 'plan':
         train_manager(args, train_plan)

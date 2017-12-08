@@ -82,7 +82,7 @@ class AirCargoProblem(Problem):
                     for c in self.cargos:
                         precond_pos = [expr("In({}, {})".format(c, p)),
                                        expr("At({}, {})".format(p, a))]
-                        #precond_neg = []
+
                         effect_add = [expr("At({}, {})".format(c, a))]
                         effect_rem = [expr("In({}, {})".format(c, p))]
                         act = Action(expr("Unload({}, {}, {})".format(c, p, a)),
@@ -316,7 +316,7 @@ def bin_gen(num, one_hot_size):
         """
     int(bin(num)[2:].zfill(one_hot_size))
 
-random.seed()
+
 
 def air_cargo_generator_v1(num_plane, num_airport, num_cargo,
                            one_hot_size=None, vec_fn=None):
@@ -467,7 +467,7 @@ def air_cargo_generator_v2(num_airport, num_cargo, num_plane,
         # generate random
         init_idx = random.randint(0, num_airport - 1)
         allowed_values = set(range(num_airport))
-        print(allowed_values, num_airport)
+        #
         allowed_values.discard(init_idx)
         goal_idx = random.choice(list(allowed_values))
         # make one_hot vecs

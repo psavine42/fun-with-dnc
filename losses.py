@@ -1,7 +1,6 @@
 import torch
-from torch.autograd import Variable
 import logger as sl
-from utils import flat, repackage
+from utils import flat, repackage, _variable
 
 
 def action_loss(logits, action, criterion, log=None):
@@ -14,7 +13,7 @@ def action_loss(logits, action, criterion, log=None):
         """
     losses = []
     for idx, action_part in enumerate(flat(action)):
-        tgt = Variable(torch.LongTensor([action_part]))
+        tgt = _variable(torch.LongTensor([action_part]))
         losses.append(criterion(logits[idx], tgt))
     loss = torch.stack(losses, 0).mean()
     if log is not None:
@@ -45,10 +44,8 @@ def combined_ent_loss(logits, action, criterion, log=None):
         """
     losses = []
     for idx, action_part in enumerate(flat(action)):
-        tgt = Variable(torch.LongTensor([action_part]))
+        tgt = _variable(torch.LongTensor([action_part]))
         losses.append(criterion(logits[idx], tgt))
-
-    # action_own = [pred[0], (pred[1], pred[2]), (pred[3], pred[4]), (pred[5], pred[6])]
     lfs = [[losses[0]]]
     n = 2
     for l in(losses[i:i+n] for i in range(1, len(losses), n)):

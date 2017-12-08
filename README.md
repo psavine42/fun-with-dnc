@@ -96,7 +96,12 @@ Set the --env flag to floyd. When it gets up there, the script will create all t
 ## Todo
 Upload best models
 Test the sequence memorization task. probably does not work.
-Implement with GPU. 
+~~Implement with GPU.~~
+Faster problem generator
+~~fix tensorboard issues~~
+~~gradient clipping~~
+run whole lstm on input and goal state?
+Document args in argparse
 Testing on moar problems.
 Dec02_00-48-05_psavine-G20AJ
 

@@ -1,17 +1,19 @@
 import torch
-import torch.nn as nn
+import torch.cuda
 from torch.autograd import Variable
-import torch.nn.functional as F
-import pickle, os, glob
+import os, glob
 from arg import args 
 
 eps = 10e-6
+MODEL_NAME = 'dnc_model.pkl'
+OPTIM_NAME = 'optimizer.pkl'
 
-def _variable(xs):
+
+def _variable(xs, **kwargs):
     if args.cuda is True:
-        return Variable(xs).cuda()
+        return Variable(xs, **kwargs).cuda()
     else:
-        return Variable(xs)
+        return Variable(xs, **kwargs)
 
 
 def repackage(xs):
@@ -28,19 +30,10 @@ def depackage(xs):
         return xs.data
     elif type(xs) == torch.Tensor:
         return xs
+    elif type(xs) == torch.cuda.FloatTensor:
+        return xs
     else:
         return tuple(depackage(v) for v in xs)
-
-
-def interface_part(num_reads, W):
-    partition = [num_reads* W, num_reads, W, 1, W, W, num_reads, 1, 1, num_reads * 3]
-    ds = []
-    cntr = 0
-    for idx in partition:
-        tn = [cntr, cntr + idx]
-        ds.append(tn)
-        cntr += idx
-    return ds
 
 
 def running_avg(cum_correct, cum_total_move, last=-100):
@@ -78,19 +71,26 @@ def clean_runs(dirs, lim=10):
             os.remove(d)
 
 
+def get_chkpt(name, idx=0):
+    search = './models/*{}/checkpts/*'.format(name)
+    chkpt = sorted(glob.glob(search))[-1] + '/'
+    return chkpt + MODEL_NAME, chkpt + OPTIM_NAME
+
+
 def dnc_checksum(state):
     return [state[i].data.sum() for i in range(6)]
 
 
-def save(model, optimizer, lstm_state, time_stmp, args, itr):
-    name =  str(time_stmp) + args.save + str(itr) + '.pkl'
+def save(model, optimizer, lstm_state, args, global_epoch):
+    chkpt = '{}{}/{}/'.format(args.base_dir, 'checkpts', global_epoch)
+    os.mkdir(chkpt)
 
-    torch.save(model.state_dict(), args.base_dir + 'dnc_model_' + name)
-    torch.save(model, args.base_dir +  'dnc_model_full_' + name)
-    torch.save(lstm_state, args.base_dir + 'lstm_state_' + name)
-    torch.save(optimizer.state_dict(), args.base_dir + 'optimizer_' + name)
-    torch.save(optimizer, args.base_dir + 'optimizer_full_' + name)
-    print("Saving ... file {} , itr {}".format(args.base_dir, itr))
+    torch.save(model.state_dict(), chkpt + MODEL_NAME)
+    torch.save(model, chkpt + 'dnc_model_full.pkl')
+    torch.save(lstm_state, chkpt + 'lstm_state.pkl')
+    torch.save(optimizer.state_dict(), chkpt + OPTIM_NAME)
+    torch.save(optimizer, chkpt + 'optimizer_full.pkl')
+    print("Saving ... file...{}, chkpt_num:{}".format(args.base_dir, global_epoch))
 
 
 def get_prediction(expanded_logits, idxs='all'):
@@ -103,15 +103,8 @@ def get_prediction(expanded_logits, idxs='all'):
     return tuple(max_idxs)
 
 
-def to_human_readable(input, mask):
-    # phase = gen.PHASES[mask]
-    # expr = data.ix_to_expr(inputs)
-    pass
-
-
-def correct(pred, actions):
-    best = 0
-    chosen_action = None
+def closest_action(pred, actions):
+    best, chosen_action = 0, None
     for action in [flat(a) for a in actions]:
         scores = [1 if pred[i] == action[i] else 0 for i in range(len(pred))]
         if sum(scores) >= best:
@@ -119,25 +112,32 @@ def correct(pred, actions):
     return chosen_action
 
 
-def human_readable_res(Data, all_actions, best_actions, chosen_action, pred, Guided, loss_data):
-    base_prob = 1 / len(all_actions)
+def human_readable_res(Data, all_actions, best_actions, pred, guided, loss_data):
 
+    base_prob = 1 / len(all_actions)
     action_own = [pred[0], (pred[1], pred[2]), (pred[3], pred[4]), (pred[5], pred[6])]
     correct = action_own in best_actions
-    best = 0
-    action_der = None
-    for action in [flat(a) for a in best_actions]:
-        scores = [1 if pred[i] == action[i] else 0 for i in range(len(pred))]
-        if sum(scores) >= best:
-            best, action_der = sum(scores), scores
 
+    action_der = closest_action(pred, best_actions)
     best_move_exprs = [Data.vec_to_expr(t) for t in best_actions]
-    all_move_exprs = [Data.vec_to_expr(t) for t in all_actions]
+    # all_move_exprs = [Data.vec_to_expr(t) for t in all_actions]
     chos_move, crest = Data.vec_to_expr(action_own)
+
     # print("all     {}".format(', '.join(["{} {}".format(m[0], m[1]) for m in all_move_exprs])))
     print("best    {}".format(', '.join(["{} {}".format(m[0], m[1]) for m in best_move_exprs])))
     print("chosen: {} {}, guided {},  prob {:0.2f}, T? {}---loss {:0.4f}".format(
-        chos_move, crest, Guided, base_prob, correct, loss_data
+        chos_move, crest, guided, base_prob, correct, loss_data
     ))
     return action_der
+
+
+def interface_part(num_reads, W):
+    partition = [num_reads* W, num_reads, W, 1, W, W, num_reads, 1, 1, num_reads * 3]
+    ds = []
+    cntr = 0
+    for idx in partition:
+        tn = [cntr, cntr + idx]
+        ds.append(tn)
+        cntr += idx
+    return ds
 

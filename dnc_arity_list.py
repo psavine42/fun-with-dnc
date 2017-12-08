@@ -3,6 +3,7 @@ import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
 from utils import *
+from utils import _variable
 # import logger as sl
 from utils import repackage
 
@@ -53,8 +54,6 @@ class VanillaLSTM(nn.Module):
                  _variable(torch.randn(self.num_layers, self.batch_size, self.hidden_size), requires_grad=True)],
                 [_variable(torch.randn(1, self.batch_size, self.out_size), requires_grad=True),
                  _variable(torch.randn(1, self.batch_size, self.out_size), requires_grad=True)]]
-
-
 
 
 class Controller(nn.Module):
@@ -183,25 +182,16 @@ class Linkage(nn.Module):
                 containing the new link graphs for each write head.
             """
 
-        #batch_size = prev_link.size(0)
+        # batch_size = prev_link.size(0)
         write_weights_i = write_weights.unsqueeze(3)
         write_weights_j = write_weights.unsqueeze(2)
 
         prev_precedence_weights_j = prev_precedence_weights.unsqueeze(2)
         prev_link_scale = 1 - write_weights_i - write_weights_j
         new_link = write_weights_i * prev_precedence_weights_j
-        #scale old links, and add new links
-        link = prev_link_scale * prev_link + new_link
 
-        # Return the link with the diagonal set to zero, to remove self-looping edges.
-            #  b w i j1 ...jn
-            # [ [ [ [ 0 1 0 ]
-            #       [ 1 0 0 ]
-            #       [ 0 0 0 ]]]]
-            #tf.matrix_set_diag( #link,
-                #tf.zeros(
-                    #[batch_size, self._num_writes, self._memory_size],
-                    #dtype=link.dtype))
+        # scale old links, and add new links
+        link = prev_link_scale * prev_link + new_link
         zeros = torch.LongTensor(list(range(self._memory_size)))
         zero_idxs = _variable(zeros.view(1, self._num_writes, -1, 1))
         return link.scatter_(-1, zero_idxs, 0)
@@ -536,14 +526,8 @@ class DNCMemory(nn.Module):
         weighted_resets = 1 - weighted_resets
         reset_gate = weighted_resets.prod(1)
 
-        #sl.log_if('access.calcs.reset_gate', reset_gate)
         memory = memory * reset_gate
-
         add_matrix = address.transpose(1, 2).matmul(values)
-
-        #sl.log_if('access.calcs.add_matrix', add_matrix)
-        #sl.log_if('access.calcs.weighted_resets', weighted_resets)
-        #sl.log_if('access.calcs.mem1', memory.add(add_matrix))
         return memory.add(add_matrix)
 
     def forward(self,
@@ -726,13 +710,9 @@ class DNC(nn.Module):
         self.num_reads = num_read_heads
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-        self.num_writes = 1 #default from paper - not messin widdit
-        #from paper
+        self.num_writes = 1 # default from paper - not messin widdit
         self.interface_size = num_read_heads * word_len + 3 * word_len + 5 * num_read_heads + 3
-        if output_size is not None:
-            self.output_size = output_size
-        else:
-            self.output_size = word_len
+        self.output_size = output_size if output_size is not None else word_len
         self._interface = InterFace(word_size=word_len,
                                     num_reads=num_read_heads,
                                     intf_size=self.interface_size + word_len,
@@ -749,8 +729,7 @@ class DNC(nn.Module):
                                  batch_size=batch_size,
                                  num_reads=num_read_heads)
         self.nn_output = nn.Linear(self.interface_size + word_len + num_read_heads * word_len, self.output_size)
-        # print(self)
-        # print(self.output_size, self.word_len)
+
 
     def init_state(self, grad=True):
         """ prev_state: A `DNCState` tuple containing the fields
@@ -764,17 +743,17 @@ class DNC(nn.Module):
                 _variable(torch.zeros(self.batch_size, self.num_writes, self.mem_size), requires_grad=grad), #write weights
                 _variable(torch.zeros(self.batch_size, self.num_writes, self.mem_size, self.mem_size), requires_grad=grad),  #linkage
                 _variable(torch.zeros(self.batch_size, self.num_writes, self.mem_size), requires_grad=grad), #linkage weight
-                _variable(torch.zeros(self.batch_size, self.mem_size), requires_grad=grad)] #usage
-                #[Variable(torch.randn(self.num_layers, self.batch_size, self.hidden_size), requires_grad=grad),
-                #  Variable(torch.randn(self.num_layers, self.batch_size, self.hidden_size), requires_grad=grad)]]
+                _variable(torch.zeros(self.batch_size, self.mem_size), requires_grad=grad)]
 
     def init_rnn(self, grad=True):
-        return [_variable(torch.ones(self.num_layers, self.batch_size, self.hidden_size) *.5, requires_grad=False),
-                _variable(torch.ones(self.num_layers, self.batch_size, self.hidden_size) *.5, requires_grad=False)]
+        return [_variable(torch.rand(self.num_layers, self.batch_size, self.hidden_size).float()),
+                _variable(torch.rand(self.num_layers, self.batch_size, self.hidden_size).float())]
 
     @property
     def memory(self):
         return self._memory
+
+
 
     def forward(self, inputs, prev_controller_state, previous_state):
         """
@@ -795,22 +774,18 @@ class DNC(nn.Module):
 
             """
         o, m, rw, ww, l, lw, u = previous_state
-
         prev_access_output = o.view(-1, self.num_reads * self.word_len)
 
         control_input = torch.cat([inputs, prev_access_output], 1)
-        # print(control_input.size())
         control_output, controller_state = self.controller(control_input, prev_controller_state)
         interface_output = self._interface(control_output)
 
         access_output, m, rw, ww, l, lw, u = self._memory(interface_output, m, rw, ww, l, lw, u)
-
         access_output_v = access_output.view(-1, self.word_len * self.num_reads)
-        # sl.log_if("memory.output", vaccess_output)
 
         output = torch.cat([control_output, access_output_v], 1)
         output_f = self.nn_output(output)
-        # print(output.size())
+
         return output_f, [access_output_v, m, rw, ww, l, lw, u], controller_state
 
 

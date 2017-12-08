@@ -4,9 +4,6 @@ import numpy as np
 from timeit import default_timer as timer
 import torch
 from utils import flat
-
-import problem
-
 import problem.my_air_cargo_problems as mac
 from problem.search import *
 from problem.planning import Action
@@ -218,7 +215,7 @@ class AirCargoData():
         Flags for
         """
     def __init__(self, num_plane=10, num_cargo=6, batch_size=6,
-                 num_airport=1000, plan_phase=1,
+                 num_airport=1000, plan_phase=1, cuda=False,
                  one_hot_size=10, encoding=2, mapping=None,
                  search_function=astar_search, solve=True):
         self.n_plane, self.n_cargo, self.n_airport = num_plane, num_cargo, num_airport
@@ -234,12 +231,13 @@ class AirCargoData():
         self.ents_to_ix, self.ix_to_ents = None, None
 
         self.STATE = ''
-        self.current_index = 0
+        self.current_index, self.cuda = 0, cuda
         self.current_problem, self.goals, self.state = None, None, None
 
         self.phase_oh = torch.eye(len(PHASES))
         self.blnk_vec = torch.zeros(len(EXPRESSIONS) * 2).float() #
         self.expr_o_h = torch.cat([torch.zeros([1, len(EXPRESSIONS)]), torch.eye(len(EXPRESSIONS))], 0).float()
+        # self.expr_o_h = self.expr_o_h.cuda() if self.cuda is True else self.expr_o_h
 
         self.ents_o_h = None
         self.masks = []
@@ -287,31 +285,37 @@ class AirCargoData():
         noops = [torch.zeros(1, i) for i in self.one_hot_size]
         self.ents_o_h = []
         for noop, ix_size in zip(noops, self.one_hot_size):
-            self.ents_o_h.append(torch.cat([noop, torch.eye(ix_size)], 0).float())
+            ix_enc = torch.cat([noop, torch.eye(ix_size)], 0).float()
+            # if self.cuda is True:
+                # ix_enc = ix_enc.cuda()
+            self.ents_o_h.append(ix_enc)
         self.blnk_vec = torch.cat([torch.zeros([1, len(EXPRESSIONS)]), torch.cat(noops, 1)], 1)
+        # if self.cuda is True:
+        # self.blnk_vec = self.blnk_vec.cuda()
 
     def print_solution(self, node):
         for action in node.solution():
             print("{}{}".format(action.name, action.args))
 
     def best_logic(self, action_exprs):
-        #index of cargo : airport
+        # index of cargo : airport
+        #
         goals = {goal.args[0]: goal.args[1] for goal in self.goals}
         best_actions = []
         for action in action_exprs:
             op = action.op
-            if sym == 'Fly':
-                cargo = action.args[0]
+            if op == 'Fly':
+                plane = action.args[0]
                 # if there is a cargo in the plane
                 # and desitination is the cargo's goal
 
                 # if there are no cargos at the airport
-
-            elif sym == 'Unload':
+                #
+            elif op == 'Unload':
                 cargo = action.args[0]
                 if goals[cargo] == action.args[2]:
                     best_actions.append(action)
-            elif sym == 'Load':
+            elif op == 'Load':
                 # load cargo if it is not in its home
                 cargo = action.args[0]
                 if goals[cargo] != action.args[2]:
@@ -405,7 +409,7 @@ class AirCargoData():
             elif insert_ is not None and idx is None:
                 for insrt_ent in insert_:
                     merged.append(insrt_ent)
-            #print('merged2', merged)
+
             if permute is not None:
                 nperm = np.argsort(permute)
                 merged = np.asarray(merged)[nperm]
@@ -502,7 +506,6 @@ class AirCargoData():
         elif mask is True:
             phase_size = self.phase_oh.size(-1)
             phase_ix = inputs[:, :phase_size].squeeze()
-            # phase_ix.
 
             inputs = inputs[:, phase_size:]
             phase = ''
@@ -536,8 +539,9 @@ class AirCargoData():
         self.current_problem = problem
         self.STATE = problem.initial
         self.generate_encodings()
-        self.state = s
-        self.goals = g
+        self.state, self.goals = s, g
+        # self.pg = mac.PlanningGraph(self, problem.initial)
+
         if self.solve is True:
             prm = getattr(problem, self.search_param)
             solution_node = len(self.search_fn(problem, prm).solution())
@@ -581,18 +585,22 @@ class AirCargoData():
             inputs = self.blnk_vec
 
         self.current_index += batch
-        return inputs, self.phase_oh[phase].unsqueeze(0)
+        mask = self.phase_oh[phase].unsqueeze(0)
+        return inputs, mask
 
     def getmask(self, batch=1):
         if self.current_index >= len(self.masks):
             self.make_new_problem()
-
         phase = self.masks[self.current_index]
         self.current_index += batch
-        return self.phase_oh[phase].unsqueeze(0)
+        mask = self.phase_oh[phase].unsqueeze(0)
+        return mask.cuda() if self.cuda is True else mask
 
     def getitem_combined(self, batch=1):
         inputs, mask = self.getitem(batch)
-        return torch.cat([mask, inputs], 1)
+        # print(inputs)
+        combined = torch.cat([mask, inputs], 1)
+        return combined.cuda() if self.cuda is True else combined
+
 
 
