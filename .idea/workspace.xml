@@ -2,22 +2,7 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="96692a2b-148d-4d12-a4fb-f9569689bd76" name="Default" comment="">
-      <change beforePath="" afterPath="$PROJECT_DIR$/visualize/wuddido.py" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" afterPath="$PROJECT_DIR$/.idea/workspace.xml" />
-      <change beforePath="$PROJECT_DIR$/README.md" afterPath="$PROJECT_DIR$/README.md" />
-      <change beforePath="$PROJECT_DIR$/arg.py" afterPath="$PROJECT_DIR$/arg.py" />
-      <change beforePath="$PROJECT_DIR$/dnc_arity_list.py" afterPath="$PROJECT_DIR$/dnc_arity_list.py" />
-      <change beforePath="$PROJECT_DIR$/generators_v2.py" afterPath="$PROJECT_DIR$/problem/generators_v2.py" />
-      <change beforePath="$PROJECT_DIR$/logger.py" afterPath="$PROJECT_DIR$/visualize/logger.py" />
-      <change beforePath="$PROJECT_DIR$/losses.py" afterPath="$PROJECT_DIR$/losses.py" />
-      <change beforePath="$PROJECT_DIR$/old/dnc.py" afterPath="$PROJECT_DIR$/old/dnc.py" />
-      <change beforePath="$PROJECT_DIR$/old/dnc_clean.py" afterPath="$PROJECT_DIR$/old/dnc_clean.py" />
-      <change beforePath="$PROJECT_DIR$/problem/aimacode/LICENSE" afterPath="" />
-      <change beforePath="$PROJECT_DIR$/problem/aimacode/__init__.py" afterPath="$PROJECT_DIR$/problem/copy_squence.py" />
-      <change beforePath="$PROJECT_DIR$/problem/my_air_cargo_problems.py" afterPath="$PROJECT_DIR$/problem/my_air_cargo_problems.py" />
-      <change beforePath="$PROJECT_DIR$/run.py" afterPath="$PROJECT_DIR$/run.py" />
-      <change beforePath="$PROJECT_DIR$/tests.py" afterPath="$PROJECT_DIR$/tests.py" />
-      <change beforePath="$PROJECT_DIR$/training.py" afterPath="$PROJECT_DIR$/training.py" />
+      <change beforePath="$PROJECT_DIR$/problem/generators_v2.py" afterPath="$PROJECT_DIR$/problem/generators_v2.py" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="TRACKING_ENABLED" value="true" />
@@ -27,7 +12,7 @@
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="FileEditorManager">
-    <splitter split-orientation="horizontal" split-proportion="0.72692174">
+    <splitter split-orientation="horizontal" split-proportion="0.66584766">
       <split-first>
         <splitter split-orientation="horizontal" split-proportion="0.36634123">
           <split-first>
@@ -73,11 +58,10 @@
               <file leaf-file-name="wuddido.py" pinned="false" current-in-tab="true">
                 <entry file="file://$PROJECT_DIR$/visualize/wuddido.py">
                   <provider selected="true" editor-type-id="text-editor">
-                    <state relative-caret-position="730">
-                      <caret line="107" column="24" lean-forward="false" selection-start-line="107" selection-start-column="24" selection-end-line="107" selection-end-column="24" />
+                    <state relative-caret-position="-49">
+                      <caret line="29" column="7" lean-forward="false" selection-start-line="29" selection-start-column="7" selection-end-line="29" selection-end-column="7" />
                       <folding>
                         <element signature="e#0#31#0" expanded="true" />
-                        <element signature="e#896#1195#1" expanded="false" />
                       </folding>
                     </state>
                   </provider>
@@ -88,7 +72,7 @@
         </splitter>
       </split-first>
       <split-second>
-        <splitter split-orientation="vertical" split-proportion="0.75981164">
+        <splitter split-orientation="vertical" split-proportion="0.13134484">
           <split-first>
             <leaf>
               <file leaf-file-name="run.py" pinned="false" current-in-tab="false">
@@ -183,8 +167,8 @@
               <file leaf-file-name="generators_v2.py" pinned="false" current-in-tab="true">
                 <entry file="file://$PROJECT_DIR$/problem/generators_v2.py">
                   <provider selected="true" editor-type-id="text-editor">
-                    <state relative-caret-position="5212">
-                      <caret line="563" column="15" lean-forward="false" selection-start-line="563" selection-start-column="15" selection-end-line="563" selection-end-column="15" />
+                    <state relative-caret-position="648">
+                      <caret line="370" column="30" lean-forward="false" selection-start-line="370" selection-start-column="30" selection-end-line="370" selection-end-column="30" />
                       <folding>
                         <element signature="e#0#14#0" expanded="true" />
                         <element signature="e#1583#8419#0" expanded="false" />
@@ -195,19 +179,19 @@
                         <element signature="e#10303#10761#0" expanded="false" />
                         <element signature="e#10805#11222#0" expanded="false" />
                         <element signature="e#11268#11357#0" expanded="false" />
-                        <element signature="e#14500#14578#0" expanded="false" />
-                        <element signature="e#15790#15987#0" expanded="false" />
-                        <element signature="e#16023#16190#0" expanded="false" />
-                        <element signature="e#16231#17944#0" expanded="false" />
-                        <element signature="e#17987#18391#0" expanded="false" />
-                        <element signature="e#18449#18781#0" expanded="false" />
-                        <element signature="e#18834#18999#0" expanded="false" />
-                        <element signature="e#19069#19296#0" expanded="false" />
-                        <element signature="e#19069#19156#1" expanded="false" />
-                        <element signature="e#19346#19417#0" expanded="false" />
-                        <element signature="e#19931#20005#0" expanded="false" />
-                        <element signature="e#20058#20295#0" expanded="false" />
-                        <element signature="e#20361#21174#0" expanded="false" />
+                        <element signature="e#14684#14762#0" expanded="false" />
+                        <element signature="e#15974#16171#0" expanded="false" />
+                        <element signature="e#16207#16374#0" expanded="false" />
+                        <element signature="e#16415#18128#0" expanded="false" />
+                        <element signature="e#18171#18575#0" expanded="false" />
+                        <element signature="e#18633#18965#0" expanded="false" />
+                        <element signature="e#19018#19183#0" expanded="false" />
+                        <element signature="e#19253#19480#0" expanded="false" />
+                        <element signature="e#19253#19340#1" expanded="false" />
+                        <element signature="e#19530#19601#0" expanded="false" />
+                        <element signature="e#20115#20189#0" expanded="false" />
+                        <element signature="e#20242#20479#0" expanded="false" />
+                        <element signature="e#20545#21358#0" expanded="false" />
                       </folding>
                     </state>
                   </provider>
@@ -251,10 +235,10 @@
         <option value="$PROJECT_DIR$/problem/copy_squence.py" />
         <option value="$PROJECT_DIR$/problem/my_air_cargo_problems.py" />
         <option value="$PROJECT_DIR$/dnc_arity_list.py" />
-        <option value="$PROJECT_DIR$/problem/generators_v2.py" />
         <option value="$PROJECT_DIR$/run.py" />
         <option value="$PROJECT_DIR$/tests.py" />
         <option value="$PROJECT_DIR$/visualize/wuddido.py" />
+        <option value="$PROJECT_DIR$/problem/generators_v2.py" />
       </list>
     </option>
   </component>
@@ -310,7 +294,7 @@
     </panes>
   </component>
   <component name="PropertiesComponent">
-    <property name="last_opened_file_path" value="$PROJECT_DIR$" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$/../isolation-nn" />
     <property name="settings.editor.selected.configurable" value="preferences.editor" />
   </component>
   <component name="RecentsManager">
@@ -447,19 +431,19 @@
             <element signature="e#10303#10761#0" expanded="false" />
             <element signature="e#10805#11222#0" expanded="false" />
             <element signature="e#11268#11357#0" expanded="false" />
-            <element signature="e#14500#14578#0" expanded="false" />
-            <element signature="e#15790#15987#0" expanded="false" />
-            <element signature="e#16023#16190#0" expanded="false" />
-            <element signature="e#16231#17944#0" expanded="false" />
-            <element signature="e#17987#18391#0" expanded="false" />
-            <element signature="e#18449#18781#0" expanded="false" />
-            <element signature="e#18834#18999#0" expanded="false" />
-            <element signature="e#19069#19296#0" expanded="false" />
-            <element signature="e#19069#19156#1" expanded="false" />
-            <element signature="e#19346#19417#0" expanded="false" />
-            <element signature="e#19931#20005#0" expanded="false" />
-            <element signature="e#20058#20295#0" expanded="false" />
-            <element signature="e#20361#21174#0" expanded="false" />
+            <element signature="e#14684#14762#0" expanded="false" />
+            <element signature="e#15974#16171#0" expanded="false" />
+            <element signature="e#16207#16374#0" expanded="false" />
+            <element signature="e#16415#18128#0" expanded="false" />
+            <element signature="e#18171#18575#0" expanded="false" />
+            <element signature="e#18633#18965#0" expanded="false" />
+            <element signature="e#19018#19183#0" expanded="false" />
+            <element signature="e#19253#19480#0" expanded="false" />
+            <element signature="e#19253#19340#1" expanded="false" />
+            <element signature="e#19530#19601#0" expanded="false" />
+            <element signature="e#20115#20189#0" expanded="false" />
+            <element signature="e#20242#20479#0" expanded="false" />
+            <element signature="e#20545#21358#0" expanded="false" />
           </folding>
         </state>
       </provider>
@@ -603,37 +587,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/problem/generators_v2.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="5212">
-          <caret line="563" column="15" lean-forward="false" selection-start-line="563" selection-start-column="15" selection-end-line="563" selection-end-column="15" />
-          <folding>
-            <element signature="e#0#14#0" expanded="true" />
-            <element signature="e#1583#8419#0" expanded="false" />
-            <element signature="e#9891#9945#0" expanded="false" />
-            <element signature="e#9996#10025#0" expanded="false" />
-            <element signature="e#10075#10109#0" expanded="false" />
-            <element signature="e#10163#10265#0" expanded="false" />
-            <element signature="e#10303#10761#0" expanded="false" />
-            <element signature="e#10805#11222#0" expanded="false" />
-            <element signature="e#11268#11357#0" expanded="false" />
-            <element signature="e#14500#14578#0" expanded="false" />
-            <element signature="e#15790#15987#0" expanded="false" />
-            <element signature="e#16023#16190#0" expanded="false" />
-            <element signature="e#16231#17944#0" expanded="false" />
-            <element signature="e#17987#18391#0" expanded="false" />
-            <element signature="e#18449#18781#0" expanded="false" />
-            <element signature="e#18834#18999#0" expanded="false" />
-            <element signature="e#19069#19296#0" expanded="false" />
-            <element signature="e#19069#19156#1" expanded="false" />
-            <element signature="e#19346#19417#0" expanded="false" />
-            <element signature="e#19931#20005#0" expanded="false" />
-            <element signature="e#20058#20295#0" expanded="false" />
-            <element signature="e#20361#21174#0" expanded="false" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/run.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="-3753">
@@ -689,13 +642,43 @@
         </state>
       </provider>
     </entry>
+    <entry file="file://$PROJECT_DIR$/problem/generators_v2.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="648">
+          <caret line="370" column="30" lean-forward="false" selection-start-line="370" selection-start-column="30" selection-end-line="370" selection-end-column="30" />
+          <folding>
+            <element signature="e#0#14#0" expanded="true" />
+            <element signature="e#1583#8419#0" expanded="false" />
+            <element signature="e#9891#9945#0" expanded="false" />
+            <element signature="e#9996#10025#0" expanded="false" />
+            <element signature="e#10075#10109#0" expanded="false" />
+            <element signature="e#10163#10265#0" expanded="false" />
+            <element signature="e#10303#10761#0" expanded="false" />
+            <element signature="e#10805#11222#0" expanded="false" />
+            <element signature="e#11268#11357#0" expanded="false" />
+            <element signature="e#14684#14762#0" expanded="false" />
+            <element signature="e#15974#16171#0" expanded="false" />
+            <element signature="e#16207#16374#0" expanded="false" />
+            <element signature="e#16415#18128#0" expanded="false" />
+            <element signature="e#18171#18575#0" expanded="false" />
+            <element signature="e#18633#18965#0" expanded="false" />
+            <element signature="e#19018#19183#0" expanded="false" />
+            <element signature="e#19253#19480#0" expanded="false" />
+            <element signature="e#19253#19340#1" expanded="false" />
+            <element signature="e#19530#19601#0" expanded="false" />
+            <element signature="e#20115#20189#0" expanded="false" />
+            <element signature="e#20242#20479#0" expanded="false" />
+            <element signature="e#20545#21358#0" expanded="false" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
     <entry file="file://$PROJECT_DIR$/visualize/wuddido.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="730">
-          <caret line="107" column="24" lean-forward="false" selection-start-line="107" selection-start-column="24" selection-end-line="107" selection-end-column="24" />
+        <state relative-caret-position="-49">
+          <caret line="29" column="7" lean-forward="false" selection-start-line="29" selection-start-column="7" selection-end-line="29" selection-end-column="7" />
           <folding>
             <element signature="e#0#31#0" expanded="true" />
-            <element signature="e#896#1195#1" expanded="false" />
           </folding>
         </state>
       </provider>

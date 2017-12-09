@@ -283,6 +283,12 @@ class AirCargoData():
             print("{}{}".format(action.name, action.args))
 
     def best_logic(self, action_exprs):
+        """
+        Astar search takes forever for this problem.
+        best logical thing to do is handcode the ops needed.
+        :param action_exprs:
+        :return:
+        """
         if self.goals_idx == {}: # the problem has no remaining goals
             return []
         best_actions, at_goal = [], []

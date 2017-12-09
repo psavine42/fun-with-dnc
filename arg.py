@@ -41,7 +41,7 @@ parser.add_argument('--num_tests', type=int, default=2, help='')
 parser.add_argument('--num_repeats', type=int, default=2, help='')
 parser.add_argument('--max_ents', type=int, default=6, help='maximum number of entities')
 parser.add_argument('--beta', type=float, default=0.8, help='mixture param from paper')
-
+parser.add_argument('--penalty', type=float, default=0.0, help='mixture param from paper')
 args = parser.parse_args()
 print('\n\n')
 
@@ -50,6 +50,7 @@ args.ret_graph = True if args.ret_graph == 1 else False
 args.cuda = True if args.cuda == 1 else False
 args.clip = None if args.clip == 0 else args.clip
 args.prefix = '/output/' if args.env == 'floyd' else './'
+args.penalty = None if args.penalty == 0.0 else args.penalty
 
 if not os.path.exists(args.prefix + 'models'):
     os.mkdir(args.prefix + 'models')
@@ -64,9 +65,6 @@ if args.save != '':
     argparse_dict = vars(args)
     with open(args.base_dir + 'params.txt', 'w') as outfile:
         json.dump(argparse_dict, outfile)
-    # arg_file = open( 'w')
-    # arg_file.write(json.dump(arg_file))
-    # arg_file.close()
     print('Saving in folder {}'.format(args.base_dir))
 
 writer = None

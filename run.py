@@ -244,8 +244,8 @@ def train_plan(args, data, DNC, lstm_state, optimizer):
                 else: # pick own move
                     final_action, lstep = L.naive_loss(exp_logits, all_actions, criterion, log=True)
 
-                # penalty for
-                action_own = u.get_prediction(exp_logits.data)
+                # penalty for todo tests this !!!!
+                action_own = u.get_prediction(exp_logits)
                 if args.penalty and not [tuple(flat(t)) for t in all_actions]:
                     final_loss = lstep * _variable([args.penalty])
                 else:
