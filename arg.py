@@ -74,7 +74,7 @@ if args.log > 0:
     from tensorboardX import SummaryWriter
     global writer
     writer = SummaryWriter()
-    import logger
+    from visualize import logger
     logger.log_step += args.log
 
 # test +new no log #

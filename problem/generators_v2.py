@@ -1,22 +1,12 @@
 import os, sys
-from torch.utils.data import Dataset
 import numpy as np
-from timeit import default_timer as timer
 import torch
 from utils import flat
-import problem.my_air_cargo_problems as mac
-from problem.search import *
-from problem.planning import Action
-from problem.logic import PropKB
-from problem.lp_utils import (
-    FluentState, encode_state, decode_state,
-)
-from problem.utils import Expr
-import itertools, random
+from . import my_air_cargo_problems as mac
+from .search import *
+from .planning import Action
+import random
 
-
-#actions = {'Fly':0, 'Load':1, 'Unload':2}
-# actions_1h = {0:'Fly', 1:'Load', 2:'Unload'}
 
 EXPRESSIONS = ['Fly', 'Load', 'Unload', 'At', 'In']
 PHASES = ['State', 'Goal', 'Plan', 'Solve']
@@ -293,7 +283,7 @@ class AirCargoData():
             print("{}{}".format(action.name, action.args))
 
     def best_logic(self, action_exprs):
-        if self.goals_idx == {}:
+        if self.goals_idx == {}: # the problem has no remaining goals
             return []
         best_actions, at_goal = [], []
         for action in action_exprs:
@@ -325,7 +315,6 @@ class AirCargoData():
                     cargos_in_dest = [cargo for cargo, _in in self.cargo_in_idx.items() if _in == dest_n]
                     if cargos_in_dest != []:
                         best_actions.append(action)
-
         if not at_goal:
             return best_actions
         else:
@@ -567,10 +556,13 @@ class AirCargoData():
 
         # if self.solve is True:
         # todo something about this maybe deepcopy self and fastsolve?
-            #prm = getattr(problem, self.search_param)
-            #solution_node = len(self.search_fn(problem, prm).solution())
+            # prm = getattr(problem, self.search_param)
+            # solution_node = len(self.search_fn(problem, prm).solution())
         # else:
         # solution_node = self.solve
+        # len = num_ents * 2 + num_ents + num_ents * 2 + num_ents * 4
+        # 9 * 6
+
         state = torch.zeros(len(self.state))
         goal = torch.ones(len(self.goals))
         plan = torch.ones(self.plan_len) * 2
@@ -621,7 +613,6 @@ class AirCargoData():
 
     def getitem_combined(self, batch=1):
         inputs, mask = self.getitem(batch)
-        # print(inputs)
         combined = torch.cat([mask, inputs], 1)
         return combined.cuda() if self.cuda is True else combined
 

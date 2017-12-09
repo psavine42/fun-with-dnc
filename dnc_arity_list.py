@@ -1,11 +1,9 @@
 import torch
 import torch.nn as nn
-from torch.autograd import Variable
 import torch.nn.functional as F
 from utils import *
-from utils import _variable
-# import logger as sl
-from utils import repackage
+from utils import _variable, repackage
+
 
 eps = 10e-6
 
@@ -39,13 +37,11 @@ class VanillaLSTM(nn.Module):
         prev_out, (ho1, hc1), (hc2, hc2) = previous_state
 
         control_input = torch.cat([inputs, prev_out], 1).unsqueeze(1)
-        # print(control_input.size())
         lstm1_out, hidden1_out = self.lst1(control_input, (ho1, hc1))
         outputs, hidden2_out = self.lstout(lstm1_out, (hc2, hc2))
 
         final_out = outputs.squeeze(0)
         mock_access = torch.cat([final_out, prev_out[:, :self.out_size]], 1)
-        # control_out = torch.cat([outputs, ], 1)
         return final_out, (mock_access, hidden1_out, hidden2_out)
 
     def init_state(self):
@@ -86,9 +82,7 @@ class Controller(nn.Module):
     def forward(self, inputs, previous_controller_state):
         """Generate interface and output vector"""
         inputs2 = inputs.unsqueeze(1)
-        # print(inputs2.size())
         lstm_out, controller_state = self.lst1(inputs2, previous_controller_state)
-
         outputs = self.map_to_output(lstm_out).squeeze(1)
         return outputs, controller_state
 
@@ -182,7 +176,6 @@ class Linkage(nn.Module):
                 containing the new link graphs for each write head.
             """
 
-        # batch_size = prev_link.size(0)
         write_weights_i = write_weights.unsqueeze(3)
         write_weights_j = write_weights.unsqueeze(2)
 
@@ -212,7 +205,6 @@ class Linkage(nn.Module):
             A `TemporalLinkageState` tuple `next_state`, which contains the updated
             link and precedence weights.
             """
-        assert list(write_weights.size()[1:]) == [1, self._memory_size]
 
         link = self._link(prev_link, precedence_weights, write_weights)
         # Calculates the new precedence weights given the current write weights.
@@ -221,9 +213,6 @@ class Linkage(nn.Module):
         #    weights unchanged, but with sum close to one will replace the precedence weights.
         write_sum = write_weights.sum(2, keepdim=True)
         precedence_weights = (1 - write_sum) * precedence_weights + write_weights
-
-        assert list(link.size()[1:]) == [1, self._memory_size, self._memory_size]
-        assert list(precedence_weights.size()[1:]) == [1, self._memory_size]
 
         return link, precedence_weights
 
@@ -260,9 +249,6 @@ class WeightFn(nn.Module):
             Weights tensor of shape `[batch_size, num_heads, memory_size]`.
             """
         memory, keys, strengths = inputs
-        assert list(memory.size())[2] == self._word_size
-        assert list(keys.size())[1:] == [self._num_heads, self._word_size]
-        assert list(strengths.size())[1:] == [self._num_heads]
 
         # Calculates the inner product between the query vector and words in memory.
         dot = keys.bmm(memory.transpose(1, 2))
@@ -278,7 +264,6 @@ class WeightFn(nn.Module):
 
         sharp_activations = activations * transformed_strengths
         result = self.softmax(sharp_activations)
-        assert list(result.size())[1] == self._num_heads
         return result
 
 
@@ -335,7 +320,6 @@ class DNCMemory(nn.Module):
 
         return indexed
 
-
     def write_allocation_weights(self, usage, write_gates):
         """Calculates freeness-based locations for writing to
 
@@ -371,7 +355,6 @@ class DNCMemory(nn.Module):
         # Pack the allocation weights for the write heads into one tensor.
         return torch.stack(allocation_weights, dim=1)
 
-
     def _write_weights(self, inputs, memory, usage):
         """Calculates the memory locations to write to.
 
@@ -400,10 +383,6 @@ class DNCMemory(nn.Module):
         # a_t^i - The allocation weights for each write head.
         write_alloc_wghts = self.write_allocation_weights(usage, write_gate)
 
-        assert list(memory.size()) == [self.batch_size, self.mem_size, self.word_size]
-        assert list(write_contnt_wghts.size()) == [self.batch_size, self.num_writes, self.mem_size]
-        assert list(write_alloc_wghts.size()) == [self.batch_size, self.num_writes, self.mem_size]
-
         # Expands gates over , [self.num_writes, self.word_size]memory locations.
         alloc_gate = alloc_gate.unsqueeze(-1)
         write_gate = write_gate.unsqueeze(-1)
@@ -411,7 +390,7 @@ class DNCMemory(nn.Module):
         # w_t^{w, i} - The write weightings for each write head.
         result = write_gate * (alloc_gate * write_alloc_wghts + (1 - alloc_gate) * write_contnt_wghts)
 
-        assert list(result.size()) == [self.batch_size, self.num_writes, self.mem_size]
+        # assert list(result.size()) == [self.batch_size, self.num_writes, self.mem_size]
         return result
 
     def directional_read_weights(self, link, prev_read_weights):
@@ -468,14 +447,9 @@ class DNCMemory(nn.Module):
             read weights for each read head.
             """
         read_keys, read_str, read_modes = inputs
- 
-        assert list(memory.size()) == [self.batch_size, self.mem_size, self.word_size]
-        assert list(prev_read_weights.size()) == [self.batch_size, self.num_reads, self.mem_size]
-        assert list(link.size()) == [self.batch_size, self.num_writes, self.mem_size, self.mem_size]
 
         # c_t^{r, i} - The content weightings for each read head.
         content_weights = self._read_content_wght([memory, read_keys, read_str])
-        assert list(content_weights.size()) == [self.batch_size, self.num_reads, self.mem_size]
 
         forward_weights = prev_read_weights.unsqueeze(1).matmul(link)
         backwrd_weights = prev_read_weights.unsqueeze(1).matmul(link.transpose(2, 3))
@@ -491,7 +465,7 @@ class DNCMemory(nn.Module):
         forward_str = (forward_mode.unsqueeze(2).unsqueeze(2) * forward_weights).sum(2)
         backwrd_str = (backward_mode.unsqueeze(2).unsqueeze(2) * backwrd_weights).sum(2)
         res = content_str + forward_str + backwrd_str
-        assert list(res.size()) == [self.batch_size, self.num_reads, self.mem_size]
+        # assert list(res.size()) == [self.batch_size, self.num_reads, self.mem_size]
         return res
 
     def _erase_and_write(self, memory, address, erase_vec, values):
@@ -514,11 +488,6 @@ class DNCMemory(nn.Module):
             Returns:
                 3-D tensor of shape `[batch_size, num_writes, word_size]`.
             """
-        assert list(memory.size()) == [self.batch_size, self.mem_size, self.word_size]
-        assert list(address.size()) == [self.batch_size, self.num_writes, self.mem_size]
-        assert list(erase_vec.size()) == [self.batch_size, self.num_writes, self.word_size]
-        assert list(values.size()) == [self.batch_size, self.num_writes, self.word_size]
-
         expand_address = address.unsqueeze(3)
         erase_vec = erase_vec.unsqueeze(2)
 
@@ -534,16 +503,9 @@ class DNCMemory(nn.Module):
                 inputs, memory, read_weights, write_weights, links, link_weights, usage):
         """ forward
             """
-        self.step += 1
-        #if self.step % sl.log_step == 0:
-            #sl.log_interface(inputs, self.step)
-
         [read_keys, read_str, write_key, write_str,
          erase_vec, write_vec, free_gates, alloc_gate, write_gate, read_modes] = inputs
 
-        assert list(memory.size()) == [self.batch_size, self.N, self.W]
-
-        # forward pass
         # 1 Update usage using 'free_gate' and previous read & write weights.
         nusage = self._usage(write_weights, free_gates, read_weights, usage)
 
@@ -551,10 +513,8 @@ class DNCMemory(nn.Module):
         write_inputs = [alloc_gate, write_str, write_key, write_gate]
         nwrite_weights = self._write_weights(write_inputs, memory, nusage)
 
-        #sl.log_if('access.calcs.write_weights2', nwrite_weights)
         # 3 Write to memory.
         memory = self._erase_and_write(memory, nwrite_weights, erase_vec, write_vec)
-        #sl.log_if('access.calc.memory_out', memory)
 
         # 4 update linkage
         nlinks, nlink_weights = self._linkage(nwrite_weights, links, link_weights)
@@ -565,7 +525,6 @@ class DNCMemory(nn.Module):
 
         # 6 read memory
         read_words = read_weights.matmul(memory)
-
         return read_words, memory, nread_weights, nwrite_weights, nlinks, nlink_weights, nusage
 
 
@@ -613,15 +572,19 @@ class InterFace(nn.Module):
 
         # e_t^i - Amount to erase the memory by before writing, for each write head.
         erase_vec, rest = self.chunk(rest, [self.num_writes, self.word_size], self.sigmoid)
+
         # v_t^i - The vectors to write to memory, for each write head `i`.
         write_vec, rest = self.chunk(rest, [self.num_writes, self.word_size])
+
         # f_t^j - Amount that the memory at the locations read from at the previous
         # time step can be declared unused, for each read head `j`.
         free_gates, rest = self.chunk(rest, [self.num_reads], self.sigmoid)
+
         # g_t^{a, i} - Interpolation between writing to unallocated memory and
         # content-based lookup, for each write head `i`. Note: `a` is simply used to
         # identify this gate with allocation vs writing (as defined below).
         alloc_gate, rest = self.chunk(rest, [self.num_writes], self.sigmoid)
+
         # g_t^{w, i} - Overall gating of write amount for each write head.
         write_gate, rest = self.chunk(rest, [self.num_writes], self.sigmoid)
 
@@ -676,9 +639,11 @@ class InterFace_Stateful(nn.Module):
         # f_t^j - Amount that the memory at the locations read from at the previous
         # time step can be declared unused, for each read head `j`.
         free_gates = self.sigmoid(self.free_gates(inputs))
+
         # g_t^{a, i} - Interpolation between writing to unallocated memory and
         # content-based lookup, for each write head `i`. Note: `a` is simply used to
         # identify this gate with allocation vs writing (as defined below).
+
         alloc_gate = self.sigmoid(self.alloc_gate(inputs))
         # g_t^{w, i} - Overall gating of write amount for each write head.
         write_gate = self.sigmoid(self.write_gate(inputs))
@@ -687,7 +652,7 @@ class InterFace_Stateful(nn.Module):
         # each write head), and content-based lookup, for each read head.
         read_modes = self.batch_softmax(self.read_modes(inputs))
 
-        print(read_modes.size())
+        # print(read_modes.size())
         return [read_keys, read_strn, write_key, write_str,
                 erase_vec, write_vec, free_gates, alloc_gate,
                 write_gate, read_modes]
@@ -743,35 +708,35 @@ class DNC(nn.Module):
                 _variable(torch.zeros(self.batch_size, self.num_writes, self.mem_size), requires_grad=grad), #write weights
                 _variable(torch.zeros(self.batch_size, self.num_writes, self.mem_size, self.mem_size), requires_grad=grad),  #linkage
                 _variable(torch.zeros(self.batch_size, self.num_writes, self.mem_size), requires_grad=grad), #linkage weight
-                _variable(torch.zeros(self.batch_size, self.mem_size), requires_grad=grad)]
+                _variable(torch.zeros(self.batch_size, self.mem_size), requires_grad=grad)] # usage
 
-    def init_rnn(self, grad=True):
-        return [_variable(torch.rand(self.num_layers, self.batch_size, self.hidden_size).float()),
-                _variable(torch.rand(self.num_layers, self.batch_size, self.hidden_size).float())]
+    def init_rnn(self, grad=True, init_f=torch.rand):
+        """
+
+        :param grad:
+        :param init_f: how to initialize the lstm
+        :return:
+        """
+        return [_variable(init_f(self.num_layers, self.batch_size, self.hidden_size).float()),
+                _variable(init_f(self.num_layers, self.batch_size, self.hidden_size).float())]
 
     @property
     def memory(self):
         return self._memory
 
-
-
     def forward(self, inputs, prev_controller_state, previous_state):
         """
-            `input`          [batch_size, seq_len, word_size]
-            `access_output`
-                `[batch_size, num_reads, word_size]` containing read words.
-                    access output_size =
-            `access_state` is a tuple of the access module's state
-                memory,       [memory_size, word_size]
-                read_weights,  W r [batch_size, num_reads, memory_size]
-                write_weights, W [batch_size, num_writes, memory_size]
-                linkage_state, L
-                    links             [batch_size, num_writes, memory_size, memory_size]
-                    precedence_wghts  [batch_size, num_writes, memory_size]
-                usage,  F
-            `controller_state` []
-                :tuple of controller module's state
+            `input`             [batch_size, seq_len, word_size]
 
+            access_output       [batch_size, num_reads, word_size]` containing read words.
+            memory,             [memory_size, word_size]
+            read_weights,       [batch_size, num_reads, memory_size]
+            write_weights,      [batch_size, num_writes, memory_size]
+            links               [batch_size, num_writes, memory_size, memory_size]
+            precedence_wghts    [batch_size, num_writes, memory_size]
+            usage,              F
+
+            controller_state: tuple of controller module's state (lstm hidden state)
             """
         o, m, rw, ww, l, lw, u = previous_state
         prev_access_output = o.view(-1, self.num_reads * self.word_len)

@@ -2,7 +2,7 @@ import random
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
-import logger as sl
+from visualize import logger as sl
 import utils as u
 import losses as l
 

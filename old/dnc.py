@@ -1,11 +1,9 @@
-import torch
 import torch.nn as nn
-from torch.autograd import Variable
 import torch.nn.functional as F
 import generators as gen
 from torch.utils.data import DataLoader
 from utils import *
-import logger as sl
+from visualize import logger as sl
 
 eps = 10e-6
 

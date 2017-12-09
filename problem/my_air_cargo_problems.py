@@ -542,9 +542,11 @@ def air_cargo_generator_v3(num_airport, num_cargo, num_plane, encoding=1):
     # cargos start end end are mutually exclusive
     # for porpises of this problem. Erp erp.
     for idx, cargo in ix_to_cargo.items():
+
         # generate random
         allowed_values = set(list(airpt_to_ix.keys()))
         init_idx = random.choice(list(allowed_values))
+
         # set a goal airport
         allowed_values.discard(init_idx)
         goal_idx = random.choice(list(allowed_values))

@@ -1,20 +1,16 @@
-import argparse
 import dnc_arity_list as dnc
 import numpy as np
-from utils import running_avg, flat, repackage, dnc_checksum, save, _variable
+from utils import running_avg, flat, save, _variable
 import utils as u
 import torch
 import torch.nn as nn
-import generators_v2 as gen
+from problem import generators_v2 as gen
 import torch.optim as optim
 import time, random
-import logger as sl
+from visualize import logger as sl
 import os
 import losses as L
-import timeit
-import training as tfn
-from collections import defaultdict
-from arg import args, start
+from arg import args
 
 random.seed()
 batch_size = 1
@@ -22,7 +18,7 @@ dnc_args = {'num_layers': 2,
             'num_read_heads': 2,
             'hidden_size': 250,
             'num_write_heads': 1,
-            'memory_size': 100,
+            'memory_size':  100, #50
             'batch_size': batch_size}
 
 
@@ -73,7 +69,12 @@ def setupDNC(args):
     print('dnc_args:\n', dnc_args, '\n')
     if args.load == '':
         Dnc = dnc.DNC(**dnc_args)
-        optimizer = optim.Adam(Dnc.parameters(), lr=args.lr)
+        if args.opt == 'adam':
+            optimizer = optim.Adam(Dnc.parameters(), lr=args.lr)
+        elif args.opt == 'sgd':
+            optimizer = optim.SGD(Dnc.parameters(), lr=args.lr)
+        else:
+            optimizer = None
     else:
         model_path, optim_path = u.get_chkpt(args.load)
         print('loading', model_path)
@@ -164,6 +165,28 @@ def train_qa2(args, data, DNC, optimizer):
     return DNC, optimizer, dnc_state, running_avg(cum_correct, cum_total)
 
 
+def random_seq(args, data, DNC, lstm_state, optimizer):
+    pass
+
+
+def train_rl(args, data, DNC, lstm_state, optimizer):
+    """
+
+    :param args:
+    :param data:
+    :param DNC: a tuple of value and action networks
+    :param lstm_state:
+    :param optimizer:
+    :return:
+    """
+    for trial in range(args.iters):
+        start_prob = time.time()
+        phase_masks = data.make_new_problem()
+
+
+    pass
+
+
 def train_plan(args, data, DNC, lstm_state, optimizer):
     """
         Things to test after some iterations:
@@ -175,7 +198,7 @@ def train_plan(args, data, DNC, lstm_state, optimizer):
         """
     criterion = nn.CrossEntropyLoss().cuda() if args.cuda is True else nn.CrossEntropyLoss()
     cum_correct, cum_total, prob_times, n_success = [], [], [], 0
-    penalty = 1.05
+    penalty = 1.1
 
     for trial in range(args.iters):
         start_prob = time.time()
@@ -221,17 +244,25 @@ def train_plan(args, data, DNC, lstm_state, optimizer):
                 else: # pick own move
                     final_action, lstep = L.naive_loss(exp_logits, all_actions, criterion, log=True)
 
-                if args.opt_at == 'problem':
-                    loss += lstep
+                # penalty for
+                action_own = u.get_prediction(exp_logits.data)
+                if args.penalty and not [tuple(flat(t)) for t in all_actions]:
+                    final_loss = lstep * _variable([args.penalty])
                 else:
-                    lstep.backward(retain_graph=args.ret_graph)
+                    final_loss = lstep
+
+                if args.opt_at == 'problem':
+                    loss += final_loss
+                else:
+
+                    final_loss.backward(retain_graph=args.ret_graph)
                     if args.clip:
                         torch.nn.utils.clip_grad_norm(DNC.parameters(), args.clip)
                     optimizer.step()
                     loss = lstep
 
                 data.send_action(final_action)
-                action_own = u.get_prediction(exp_logits)
+
                 if (trial + 1) % args.show_details == 0:
                     action_accs = u.human_readable_res(data, all_actions, actions_star,
                                                        action_own, guided, lstep.data[0])
@@ -268,6 +299,12 @@ def train_plan(args, data, DNC, lstm_state, optimizer):
 
 
 def train_manager(args, train_fn):
+    """
+
+    :param args: args object. see arg.py or run.py -h for details
+    :param train_fn: the training function -
+    :return:
+    """
     datspec = generate_data_spec(args)
     print('\nInitial Spec', datspec)
 
@@ -303,7 +340,7 @@ def train_manager(args, train_fn):
                 break
 
         if passing is False:
-            print("Training has failed for problem of size: {}, after {} epochs of {} phases".format(
+            print("Training has FAILED for problem of size: {}, after {} epochs of {} phases".format(
                 test_size, args.max_ents, args.n_phases
             ))
             print("final score was {}".format(score))

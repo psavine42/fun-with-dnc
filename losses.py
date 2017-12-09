@@ -1,6 +1,6 @@
 import torch
-import logger as sl
-from utils import flat, repackage, depackage, _variable, closest_action
+from visualize import logger as sl
+from utils import flat, repackage, _variable
 
 
 def action_loss(logits, action, criterion, log=None):
@@ -21,7 +21,7 @@ def action_loss(logits, action, criterion, log=None):
     return loss
 
 
-def get_top_prediction(expanded_logits, targets, idxs=None):
+def get_top_prediction(expanded_logits, idxs=None):
     max_idxs = []
     idxs = range(len(expanded_logits)) if idxs is None else idxs
     for idx in idxs:
@@ -44,7 +44,7 @@ def combined_ent_loss(logits, action, criterion, log=None):
         """
     losses = []
     for idx, action_part in enumerate(flat(action)):
-        tgt = _variable(torch.LongTensor([action_part]))
+        tgt = _variable(torch.Tensor([action_part]).float())
         losses.append(criterion(logits[idx], tgt))
     lfs = [[losses[0]]]
     n = 2
